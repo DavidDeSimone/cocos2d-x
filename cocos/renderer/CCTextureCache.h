@@ -231,6 +231,7 @@ private:
     void addImageAsyncCallBack(float dt);
     void loadImage();
     void parseNinePatchImage(Image* image, Texture2D* texture, const std::string& path);
+
 public:
 protected:
     struct AsyncStruct;
@@ -254,6 +255,7 @@ protected:
     std::unordered_map<std::string, Texture2D*> _textures;
 
     static std::string s_etc1AlphaFileSuffix;
+    Texture2D* loadTexture(AsyncStruct* asyncStruct);
 };
 
 #if CC_ENABLE_CACHE_TEXTURE_DATA

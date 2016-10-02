@@ -31,6 +31,7 @@ THE SOFTWARE.
 #include <stack>
 #include <cctype>
 #include <list>
+#include <future>
 
 #include "renderer/CCTexture2D.h"
 #include "base/ccMacros.h"
@@ -184,6 +185,53 @@ void TextureCache::addImageAsync(const std::string &path, const std::function<vo
     _sleepCondition.notify_one();
 }
 
+Texture2D* TextureCache::loadTexture(AsyncStruct *asyncStruct)
+{
+    Texture2D *returnTexture = nullptr;
+    auto it = _textures.find(asyncStruct->filename);
+    if (it != _textures.end())
+    {
+        returnTexture = it->second;
+    }
+    else
+    {
+        // convert image to texture
+        if (asyncStruct->loadSuccess)
+        {
+            Image* image = &(asyncStruct->image);
+            // generate texture in render thread
+            returnTexture = new (std::nothrow) Texture2D();
+
+            returnTexture->initWithImage(image, asyncStruct->pixelFormat);
+            //parse 9-patch info
+            this->parseNinePatchImage(image, returnTexture, asyncStruct->filename);
+#if CC_ENABLE_CACHE_TEXTURE_DATA
+            // cache the texture file name
+            VolatileTextureMgr::addImageTexture(returnTexture, asyncStruct->filename);
+#endif
+            // cache the texture. retain it, since it is added in the map
+            _textures.insert(std::make_pair(asyncStruct->filename, returnTexture));
+            returnTexture->retain();
+
+            returnTexture->autorelease();
+            // ETC1 ALPHA supports.
+            if (asyncStruct->imageAlpha.getFileType() == Image::Format::ETC) {
+                auto alphaTexture = new(std::nothrow) Texture2D();
+                if(alphaTexture != nullptr && alphaTexture->initWithImage(&asyncStruct->imageAlpha, asyncStruct->pixelFormat)) {
+                    returnTexture->setAlphaTexture(alphaTexture);
+                }
+                CC_SAFE_RELEASE(alphaTexture);
+            }
+        }
+        else {
+            returnTexture = nullptr;
+            CCLOG("cocos2d: failed to call TextureCache::loadTexture(%s)", asyncStruct->filename.c_str());
+        }
+    }
+
+    return returnTexture;
+}
+
 void TextureCache::addImageAsyncImmediate(const std::string &filename, const std::function<void(Texture2D*)>& callback)
 {
     Texture2D *texture = nullptr;
@@ -221,48 +269,8 @@ void TextureCache::addImageAsyncImmediate(const std::string &filename, const std
         }
 
         Director::getInstance()->getScheduler()->performFunctionInCocosThread([this, asyncStruct] () {
-            Texture2D *returnTexture = nullptr;
-            auto it = _textures.find(asyncStruct->filename);
-            if (it != _textures.end())
-            {
-                returnTexture = it->second;
-            }
-            else
-            {
-                // convert image to texture
-                if (asyncStruct->loadSuccess)
-                {
-                    Image* image = &(asyncStruct->image);
-                    // generate texture in render thread
-                    returnTexture = new (std::nothrow) Texture2D();
-
-                    returnTexture->initWithImage(image, asyncStruct->pixelFormat);
-                    //parse 9-patch info
-                    this->parseNinePatchImage(image, returnTexture, asyncStruct->filename);
-#if CC_ENABLE_CACHE_TEXTURE_DATA
-                    // cache the texture file name
-                    VolatileTextureMgr::addImageTexture(returnTexture, asyncStruct->filename);
-#endif
-                    // cache the texture. retain it, since it is added in the map
-                    _textures.insert(std::make_pair(asyncStruct->filename, returnTexture));
-                    returnTexture->retain();
-
-                    returnTexture->autorelease();
-                    // ETC1 ALPHA supports.
-                    if (asyncStruct->imageAlpha.getFileType() == Image::Format::ETC) {
-                        auto alphaTexture = new(std::nothrow) Texture2D();
-                        if(alphaTexture != nullptr && alphaTexture->initWithImage(&asyncStruct->imageAlpha, asyncStruct->pixelFormat)) {
-                            returnTexture->setAlphaTexture(alphaTexture);
-                        }
-                        CC_SAFE_RELEASE(alphaTexture);
-                    }
-                }
-                else {
-                    returnTexture = nullptr;
-                    CCLOG("cocos2d: failed to call TextureCache::addImageAsyncImmediate(%s)", asyncStruct->filename.c_str());
-                }
-            }
-
+            auto returnTexture = loadTexture(asyncStruct);
+            
             // call callback function
             if (asyncStruct->callback)
             {
@@ -389,47 +397,8 @@ void TextureCache::addImageAsyncCallBack(float dt)
         }
 
         // check the image has been convert to texture or not
-        auto it = _textures.find(asyncStruct->filename);
-        if (it != _textures.end())
-        {
-            texture = it->second;
-        }
-        else
-        {
-            // convert image to texture
-            if (asyncStruct->loadSuccess)
-            {
-                Image* image = &(asyncStruct->image);
-                // generate texture in render thread
-                texture = new (std::nothrow) Texture2D();
-
-                texture->initWithImage(image, asyncStruct->pixelFormat);
-                //parse 9-patch info
-                this->parseNinePatchImage(image, texture, asyncStruct->filename);
-#if CC_ENABLE_CACHE_TEXTURE_DATA
-                // cache the texture file name
-                VolatileTextureMgr::addImageTexture(texture, asyncStruct->filename);
-#endif
-                // cache the texture. retain it, since it is added in the map
-                _textures.insert(std::make_pair(asyncStruct->filename, texture));
-                texture->retain();
-
-                texture->autorelease();
-                // ETC1 ALPHA supports.
-                if (asyncStruct->imageAlpha.getFileType() == Image::Format::ETC) {
-                    auto alphaTexture = new(std::nothrow) Texture2D();
-                    if(alphaTexture != nullptr && alphaTexture->initWithImage(&asyncStruct->imageAlpha, asyncStruct->pixelFormat)) {
-                        texture->setAlphaTexture(alphaTexture);
-                    }
-                    CC_SAFE_RELEASE(alphaTexture);
-                }
-            }
-            else {
-                texture = nullptr;
-                CCLOG("cocos2d: failed to call TextureCache::addImageAsync(%s)", asyncStruct->filename.c_str());
-            }
-        }
-
+        texture = loadTexture(asyncStruct);
+        
         // call callback function
         if (asyncStruct->callback)
         {
