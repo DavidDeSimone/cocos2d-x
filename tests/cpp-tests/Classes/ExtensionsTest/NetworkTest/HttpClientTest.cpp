@@ -154,6 +154,26 @@ void HttpClientTest::onMenuGetTestClicked(cocos2d::Ref *sender, bool isImmediate
         }
         request->release();
     }
+
+    // test 4, should timeout
+    {
+        HttpRequest* request = new (std::nothrow) HttpRequest();
+        request->setUrl("https://httpbin.org/get");
+        request->setRequestType(HttpRequest::Type::GET);
+        request->setRequestTimeout(1); // This should fail and timeout.
+        request->setResponseCallback(CC_CALLBACK_2(HttpClientTest::onHttpRequestCompleted, this));
+        if (isImmediate)
+        {
+            request->setTag("GET immediate test4");
+            HttpClient::getInstance()->sendImmediate(request);
+        }else
+        {
+            request->setTag("GET test4");
+            HttpClient::getInstance()->send(request);
+        }
+        request->release();
+    }
+
         
     // waiting
     _labelStatusCode->setString("waiting...");
