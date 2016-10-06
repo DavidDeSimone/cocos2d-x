@@ -377,7 +377,7 @@ protected:
     ccHttpRequestCallback       _pCallback;      /// C++11 style callbacks
     void*                       _pUserData;      /// You can add your customed data here
     std::vector<std::string>    _headers;              /// custom http headers
-    int          _requestTimeout; // number of milliseconds until the request is automatically cancelled 
+    int                         _requestTimeout; // number of milliseconds until the request is automatically cancelled 
 };
 
 }
