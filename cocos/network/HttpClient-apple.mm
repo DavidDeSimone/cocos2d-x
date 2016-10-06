@@ -144,9 +144,15 @@ static int processTask(HttpClient* client, HttpRequest* request, NSString* reque
     NSString* urlstring = [NSString stringWithUTF8String:request->getUrl()];
     NSURL *url = [NSURL URLWithString:urlstring];
 
+    int requestTimeout = HttpClient::getInstance()->getTimeoutForConnect();
+    if (request->getRequestTimeout()) 
+    {
+        requestTimeout = request->getRequestTimeout() / 1000;
+    }
+
     NSMutableURLRequest *nsrequest = [NSMutableURLRequest requestWithURL:url
                                                cachePolicy:NSURLRequestReloadIgnoringLocalAndRemoteCacheData
-                                           timeoutInterval:HttpClient::getInstance()->getTimeoutForConnect()];
+                                           timeoutInterval:requestTimeout];
     
     //set request type
     [nsrequest setHTTPMethod:requestType];

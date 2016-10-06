@@ -269,6 +269,12 @@ public:
             }
         }
 
+        if (request->getRequestTimeout()) 
+        {
+            // Override the global curl request timeout if set
+            setOption(CURLOPT_TIMEOUT, request->getRequestTimeout() / 1000); // Convert to seconds
+        }
+
         return setOption(CURLOPT_URL, request->getUrl())
                 && setOption(CURLOPT_WRITEFUNCTION, callback)
                 && setOption(CURLOPT_WRITEDATA, stream)

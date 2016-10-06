@@ -89,6 +89,7 @@ public:
         , _pSelector(nullptr)
         , _pCallback(nullptr)
         , _pUserData(nullptr)
+        , _requestTimeout(0)
     {
     }
 
@@ -339,6 +340,16 @@ public:
         return _headers;
     }
 
+    void setRequestTimeout(int timeout) 
+    {
+        _requestTimeout = timeout;
+    }
+
+    int getRequestTimeout() const
+    {
+        return _requestTimeout;
+    }
+
 private:
     void doSetResponseCallback(Ref* pTarget, SEL_HttpResponse pSelector)
     {
@@ -366,6 +377,7 @@ protected:
     ccHttpRequestCallback       _pCallback;      /// C++11 style callbacks
     void*                       _pUserData;      /// You can add your customed data here
     std::vector<std::string>    _headers;              /// custom http headers
+    int          _requestTimeout; // number of milliseconds until the request is automatically cancelled 
 };
 
 }

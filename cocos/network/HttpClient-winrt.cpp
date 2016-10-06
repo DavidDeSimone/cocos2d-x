@@ -176,19 +176,19 @@ namespace network {
         switch (request->getRequestType())
         {
         case HttpRequest::Type::GET: // HTTP GET
-            ok = (xhr.init(request) && xhr.open("GET", manualAuthReqd, s_cookieFilename) && xhr.send());
+            ok = (xhr.init(request, request->getRequestTimeout()) && xhr.open("GET", manualAuthReqd, s_cookieFilename) && xhr.send());
             break;
 
         case HttpRequest::Type::POST: // HTTP POST
-            ok = (xhr.init(request) && xhr.open("POST", manualAuthReqd, s_cookieFilename) && xhr.send());
+            ok = (xhr.init(request, request->getRequestTimeout()) && xhr.open("POST", manualAuthReqd, s_cookieFilename) && xhr.send());
             break;
 
         case HttpRequest::Type::PUT: // HTTP PUT
-            ok = (xhr.init(request) && xhr.open("PUT", manualAuthReqd, s_cookieFilename) && xhr.send());
+            ok = (xhr.init(request, request->getRequestTimeout()) && xhr.open("PUT", manualAuthReqd, s_cookieFilename) && xhr.send());
             break;
 
         case HttpRequest::Type::DELETE: // HTTP DELETE
-            ok = (xhr.init(request) && xhr.open("DELETE", manualAuthReqd, s_cookieFilename) && xhr.send());
+            ok = (xhr.init(request, request->getRequestTimeout()) && xhr.open("DELETE", manualAuthReqd, s_cookieFilename) && xhr.send());
             break;
 
         default:

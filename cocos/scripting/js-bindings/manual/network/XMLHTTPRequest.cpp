@@ -511,7 +511,8 @@ JS_BINDED_PROP_SET_IMPL(MinXmlHttpRequest, timeout)
 {
     long long tmp;
     jsval_to_long_long(cx, args.get(0), &tmp);
-    _timeout = (unsigned long long)tmp;
+    _timeout = static_cast<int>(tmp);
+    _httpRequest->setTimeout(_timeout);
     return true;
 
 }
