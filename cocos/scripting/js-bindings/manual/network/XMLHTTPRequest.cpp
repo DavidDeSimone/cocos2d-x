@@ -494,7 +494,7 @@ JS_BINDED_PROP_SET_IMPL(MinXmlHttpRequest, upload)
 }
 
 /**
- *  @brief timeout getter - TODO
+ *  @brief timeout getter 
  *
  */
 JS_BINDED_PROP_GET_IMPL(MinXmlHttpRequest, timeout)
@@ -504,14 +504,14 @@ JS_BINDED_PROP_GET_IMPL(MinXmlHttpRequest, timeout)
 }
 
 /**
- *  @brief timeout setter - TODO
+ *  @brief timeout setter
  *
  */
 JS_BINDED_PROP_SET_IMPL(MinXmlHttpRequest, timeout)
 {
     long long tmp;
     jsval_to_long_long(cx, args.get(0), &tmp);
-    _timeout = static_cast<int>(tmp);
+    _timeout = (unsigned long long)tmp;
     _httpRequest->setTimeout(_timeout);
     return true;
 
