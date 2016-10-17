@@ -37,7 +37,9 @@
 #include <vector>
 #include <atomic>
 
-namespace cocos2d { 
+#include "cocos2d.h"
+
+NS_CC_BEGIN
 
 /**
  * @addtogroup base
@@ -233,4 +235,4 @@ private:
 // end of base group
 /// @}
 
-} // namespace cocos2d {
+NS_CC_END

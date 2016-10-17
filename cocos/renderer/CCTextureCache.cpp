@@ -243,7 +243,7 @@ void TextureCache::addImageAsyncCallBack(float dt)
             _responseQueue.pop_front();
 
             // the asyncStruct's sequence order in _asyncStructQueue must equal to the order in _responseQueue
-            CC_ASSERT(asyncStruct == _asyncStructQueue.front());
+            //CC_ASSERT(asyncStruct == _asyncStructQueue.front());
             _asyncStructQueue.pop_front();
         }
         _responseMutex.unlock();

@@ -25,9 +25,7 @@
  
  ****************************************************************************/
 
-#include "audio/android/CCThreadPool.h"
-#include <sys/time.h>
-
+#include "platform/CCThreadPool.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -36,8 +34,8 @@
 #else
 #define LOGD(...) printf(__VA_ARGS__)
 #endif
-asfasfas
-namespace cocos2d {
+
+NS_CC_BEGIN
 
 #define DEFAULT_THREAD_POOL_MIN_NUM (4)
 #define DEFAULT_THREAD_POOL_MAX_NUM (20)
@@ -439,4 +437,4 @@ void ThreadPool::setThread(int tid)
             new(std::nothrow) std::thread(f)); // compiler may not support std::make_unique()
 }
 
-} // namespace cocos2d {
+NS_CC_END

@@ -39,13 +39,15 @@ THE SOFTWARE.
 #include "base/CCRef.h"
 #include "renderer/CCTexture2D.h"
 #include "platform/CCImage.h"
-#include "platform/CCThreadPool.h" 
+
 
 #if CC_ENABLE_CACHE_TEXTURE_DATA
     #include <list>
 #endif
 
 NS_CC_BEGIN
+
+class ThreadPool;
 
 /**
  * @addtogroup _2d
@@ -220,7 +222,7 @@ public:
 protected:
     struct AsyncStruct;
     
-    cocos2d::ThreadPool *_threadPool;
+    ThreadPool *_threadPool;
 
     std::deque<AsyncStruct*> _asyncStructQueue;
     std::deque<AsyncStruct*> _responseQueue;
