@@ -37,14 +37,14 @@
 #include <vector>
 #include <atomic>
 
-namespace cocos2d { namespace experimental {
+namespace cocos2d { 
 
 /**
  * @addtogroup base
  * @{
  */
 
-class ThreadPool
+class CC_DLL ThreadPool
 {
 public:
 
@@ -233,4 +233,4 @@ private:
 // end of base group
 /// @}
 
-}} // namespace cocos2d { namespace experimental {
+} // namespace cocos2d {

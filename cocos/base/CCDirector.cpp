@@ -413,11 +413,7 @@ void Director::initTextureCache()
 
 void Director::destroyTextureCache()
 {
-    if (_textureCache)
-    {
-        _textureCache->waitForQuit();
-        CC_SAFE_RELEASE_NULL(_textureCache);
-    }
+    CC_SAFE_RELEASE_NULL(_textureCache);
 }
 
 void Director::setViewport()

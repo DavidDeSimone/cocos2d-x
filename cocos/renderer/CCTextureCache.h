@@ -39,6 +39,7 @@ THE SOFTWARE.
 #include "base/CCRef.h"
 #include "renderer/CCTexture2D.h"
 #include "platform/CCImage.h"
+#include "platform/CCThreadPool.h" 
 
 #if CC_ENABLE_CACHE_TEXTURE_DATA
     #include <list>
@@ -192,10 +193,6 @@ public:
     */
     std::string getCachedTextureInfo() const;
 
-    //Wait for texture cache to quit before destroy instance.
-    /**Called by director, please do not called outside.*/
-    void waitForQuit();
-
     /**
      * Get the file path of the texture
      *
@@ -218,22 +215,16 @@ public:
 
 private:
     void addImageAsyncCallBack(float dt);
-    void loadImage();
     void parseNinePatchImage(Image* image, Texture2D* texture, const std::string& path);
 public:
 protected:
     struct AsyncStruct;
     
-    std::thread* _loadingThread;
+    cocos2d::ThreadPool *_threadPool;
 
     std::deque<AsyncStruct*> _asyncStructQueue;
-    std::deque<AsyncStruct*> _requestQueue;
     std::deque<AsyncStruct*> _responseQueue;
-
-    std::mutex _requestMutex;
     std::mutex _responseMutex;
-    
-    std::condition_variable _sleepCondition;
 
     bool _needQuit;
 

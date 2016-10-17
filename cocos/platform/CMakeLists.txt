@@ -113,6 +113,7 @@ set(COCOS_PLATFORM_SRC
   platform/CCSAXParser.cpp
   platform/CCThread.cpp
   platform/CCGLView.cpp
+  platform/CCThreadPool.cpp
   platform/CCFileUtils.cpp
   platform/CCImage.cpp
   ../external/edtaa3func/edtaa3func.cpp

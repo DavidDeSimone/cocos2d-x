@@ -31,6 +31,7 @@ THE SOFTWARE.
 #include <stack>
 #include <cctype>
 #include <list>
+#include <algorithm>
 
 #include "renderer/CCTexture2D.h"
 #include "base/ccMacros.h"
@@ -40,8 +41,7 @@ THE SOFTWARE.
 #include "platform/CCFileUtils.h"
 #include "base/ccUtils.h"
 #include "base/CCNinePatchImageParser.h"
-
-
+#include "platform/CCThreadPool.h"
 
 using namespace std;
 
@@ -62,7 +62,7 @@ TextureCache * TextureCache::getInstance()
 }
 
 TextureCache::TextureCache()
-: _loadingThread(nullptr)
+: _threadPool(nullptr)
 , _needQuit(false)
 , _asyncRefCount(0)
 {
@@ -75,7 +75,7 @@ TextureCache::~TextureCache()
     for (auto it = _textures.begin(); it != _textures.end(); ++it)
         (it->second)->release();
 
-    CC_SAFE_DELETE(_loadingThread);
+    CC_SAFE_DELETE(_threadPool);
 }
 
 void TextureCache::destroyInstance()
@@ -158,11 +158,11 @@ void TextureCache::addImageAsync(const std::string &path, const std::function<vo
     }
 
     // lazy init
-    if (_loadingThread == nullptr)
+    if (_threadPool == nullptr)
     {
-        // create a new thread to load images
-        _loadingThread = new (std::nothrow) std::thread(&TextureCache::loadImage, this);
-        _needQuit = false;
+        int numCores = std::thread::hardware_concurrency(); // May return 0 if unable to detect.
+       _threadPool = ThreadPool::newCachedThreadPool(0, std::max(numCores, 1),
+                                                    5.0f, 2, 2);
     }
 
     if (0 == _asyncRefCount)
@@ -177,11 +177,23 @@ void TextureCache::addImageAsync(const std::string &path, const std::function<vo
 
     // add async struct into queue
     _asyncStructQueue.push_back(data);
-    _requestMutex.lock();
-    _requestQueue.push_back(data);
-    _requestMutex.unlock();
 
-    _sleepCondition.notify_one();
+    // load image
+    _threadPool->pushTask([this, data] (int taskid) 
+    {
+        data->loadSuccess = data->image.initWithImageFileThreadSafe(data->filename);
+        // ETC1 ALPHA supports.
+        if (data->loadSuccess && data->image.getFileType() == Image::Format::ETC && !s_etc1AlphaFileSuffix.empty())
+        { // check whether alpha texture exists & load it
+            auto alphaFile = data->filename + s_etc1AlphaFileSuffix;
+            if (FileUtils::getInstance()->isFileExist(alphaFile))
+                data->imageAlpha.initWithImageFileThreadSafe(alphaFile);
+        }
+
+        _responseMutex.lock();
+        _responseQueue.push_back(data);
+        _responseMutex.unlock();
+    });
 }
 
 void TextureCache::unbindImageAsync(const std::string& filename)
@@ -210,48 +222,6 @@ void TextureCache::unbindAllImageAsync()
     for (auto it = _asyncStructQueue.begin(); it != _asyncStructQueue.end(); ++it)
     {
         (*it)->callback = nullptr;
-    }
-}
-
-void TextureCache::loadImage()
-{
-    AsyncStruct *asyncStruct = nullptr;
-    std::mutex signalMutex;
-    std::unique_lock<std::mutex> signal(signalMutex);
-    while (!_needQuit)
-    {
-        // pop an AsyncStruct from request queue
-        _requestMutex.lock();
-        if (_requestQueue.empty())
-        {
-            asyncStruct = nullptr;
-        }
-        else
-        {
-            asyncStruct = _requestQueue.front();
-            _requestQueue.pop_front();
-        }
-        _requestMutex.unlock();
-
-        if (nullptr == asyncStruct) {
-            _sleepCondition.wait(signal);
-            continue;
-        }
-
-        // load image
-        asyncStruct->loadSuccess = asyncStruct->image.initWithImageFileThreadSafe(asyncStruct->filename);
-
-        // ETC1 ALPHA supports.
-        if (asyncStruct->loadSuccess && asyncStruct->image.getFileType() == Image::Format::ETC && !s_etc1AlphaFileSuffix.empty())
-        { // check whether alpha texture exists & load it
-            auto alphaFile = asyncStruct->filename + s_etc1AlphaFileSuffix;
-            if (FileUtils::getInstance()->isFileExist(alphaFile))
-                asyncStruct->imageAlpha.initWithImageFileThreadSafe(alphaFile);
-        }
-        // push the asyncStruct to response queue
-        _responseMutex.lock();
-        _responseQueue.push_back(asyncStruct);
-        _responseMutex.unlock();
     }
 }
 
@@ -601,14 +571,6 @@ std::string TextureCache::getTextureFilePath(cocos2d::Texture2D* texture) const
         }
     }
     return "";
-}
-
-void TextureCache::waitForQuit()
-{
-    // notify sub thread to quick
-    _needQuit = true;
-    _sleepCondition.notify_one();
-    if (_loadingThread) _loadingThread->join();
 }
 
 std::string TextureCache::getCachedTextureInfo() const
