@@ -45,6 +45,8 @@ THE SOFTWARE.
 #include "2d/CCParticleSystem.h"
 
 #include <string>
+#include <thread>
+#include <future>
 
 #include "2d/CCParticleBatchNode.h"
 #include "renderer/CCTextureAtlas.h"
@@ -864,10 +866,6 @@ void ParticleSystem::update(float dt)
         for (int i = 0; i < _particleCount; ++i)
         {
             _particleData.timeToLive[i] -= dt;
-        }
-        
-        for (int i = 0; i < _particleCount; ++i)
-        {
             if (_particleData.timeToLive[i] <= 0.0f)
             {
                 int j = _particleCount - 1;
@@ -894,108 +892,130 @@ void ParticleSystem::update(float dt)
                 }
             }
         }
-        
-        if (_emitterMode == Mode::GRAVITY)
-        {
-            for (int i = 0 ; i < _particleCount; ++i)
-            {
-                particle_point tmp, radial = {0.0f, 0.0f}, tangential;
-                
-                // radial acceleration
-                if (_particleData.posx[i] || _particleData.posy[i])
-                {
-                    nomalize_point(_particleData.posx[i], _particleData.posy[i], &radial);
-                }
-                tangential = radial;
-                radial.x *= _particleData.modeA.radialAccel[i];
-                radial.y *= _particleData.modeA.radialAccel[i];
-                
-                // tangential acceleration
-                std::swap(tangential.x, tangential.y);
-                tangential.x *= - _particleData.modeA.tangentialAccel[i];
-                tangential.y *= _particleData.modeA.tangentialAccel[i];
-                
-                // (gravity + radial + tangential) * dt
-                tmp.x = radial.x + tangential.x + modeA.gravity.x;
-                tmp.y = radial.y + tangential.y + modeA.gravity.y;
-                tmp.x *= dt;
-                tmp.y *= dt;
-                
-                _particleData.modeA.dirX[i] += tmp.x;
-                _particleData.modeA.dirY[i] += tmp.y;
-                
-                // this is cocos2d-x v3.0
-                // if (_configName.length()>0 && _yCoordFlipped != -1)
-                
-                // this is cocos2d-x v3.0
-                tmp.x = _particleData.modeA.dirX[i] * dt * _yCoordFlipped;
-                tmp.y = _particleData.modeA.dirY[i] * dt * _yCoordFlipped;
-                _particleData.posx[i] += tmp.x;
-                _particleData.posy[i] += tmp.y;
-            }
-        }
-        else
-        {
-            //Why use so many for-loop separately instead of putting them together?
-            //When the processor needs to read from or write to a location in memory,
-            //it first checks whether a copy of that data is in the cache.
-            //And every property's memory of the particle system is continuous,
-            //for the purpose of improving cache hit rate, we should process only one property in one for-loop AFAP.
-            //It was proved to be effective especially for low-end machine. 
-            for (int i = 0; i < _particleCount; ++i)
-            {
-                _particleData.modeB.angle[i] += _particleData.modeB.degreesPerSecond[i] * dt;
-            }
-            
-            for (int i = 0; i < _particleCount; ++i)
-            {
-                _particleData.modeB.radius[i] += _particleData.modeB.deltaRadius[i] * dt;
-            }
-            
-            for (int i = 0; i < _particleCount; ++i)
-            {
-                _particleData.posx[i] = - cosf(_particleData.modeB.angle[i]) * _particleData.modeB.radius[i];
-            }
-            for (int i = 0; i < _particleCount; ++i)
-            {
-                _particleData.posy[i] = - sinf(_particleData.modeB.angle[i]) * _particleData.modeB.radius[i] * _yCoordFlipped;
-            }
-        }
-        
-        //color r,g,b,a
-        for (int i = 0 ; i < _particleCount; ++i)
-        {
-            _particleData.colorR[i] += _particleData.deltaColorR[i] * dt;
-        }
-        
-        for (int i = 0 ; i < _particleCount; ++i)
-        {
-            _particleData.colorG[i] += _particleData.deltaColorG[i] * dt;
-        }
-        
-        for (int i = 0 ; i < _particleCount; ++i)
-        {
-            _particleData.colorB[i] += _particleData.deltaColorB[i] * dt;
-        }
-        
-        for (int i = 0 ; i < _particleCount; ++i)
-        {
-            _particleData.colorA[i] += _particleData.deltaColorA[i] * dt;
-        }
-        //size
-        for (int i = 0 ; i < _particleCount; ++i)
-        {
-            _particleData.size[i] += (_particleData.deltaSize[i] * dt);
-            _particleData.size[i] = MAX(0, _particleData.size[i]);
-        }
-        //angle
-        for (int i = 0 ; i < _particleCount; ++i)
-        {
-            _particleData.rotation[i] += _particleData.deltaRotation[i] * dt;
-        }
-        
-        updateParticleQuads();
-        _transformSystemDirty = false;
+
+
+		auto fn = [=](int begin, int end) 
+		{
+			if (_emitterMode == Mode::GRAVITY)
+			{
+				for (int i = begin; i < end; ++i)
+				{
+					particle_point tmp, radial = { 0.0f, 0.0f }, tangential;
+
+					// radial acceleration
+					if (_particleData.posx[i] || _particleData.posy[i])
+					{
+						nomalize_point(_particleData.posx[i], _particleData.posy[i], &radial);
+					}
+					tangential = radial;
+					radial.x *= _particleData.modeA.radialAccel[i];
+					radial.y *= _particleData.modeA.radialAccel[i];
+
+					// tangential acceleration
+					std::swap(tangential.x, tangential.y);
+					tangential.x *= -_particleData.modeA.tangentialAccel[i];
+					tangential.y *= _particleData.modeA.tangentialAccel[i];
+
+					// (gravity + radial + tangential) * dt
+					tmp.x = radial.x + tangential.x + modeA.gravity.x;
+					tmp.y = radial.y + tangential.y + modeA.gravity.y;
+					tmp.x *= dt;
+					tmp.y *= dt;
+
+					_particleData.modeA.dirX[i] += tmp.x;
+					_particleData.modeA.dirY[i] += tmp.y;
+
+					// this is cocos2d-x v3.0
+					// if (_configName.length()>0 && _yCoordFlipped != -1)
+
+					// this is cocos2d-x v3.0
+					tmp.x = _particleData.modeA.dirX[i] * dt * _yCoordFlipped;
+					tmp.y = _particleData.modeA.dirY[i] * dt * _yCoordFlipped;
+					_particleData.posx[i] += tmp.x;
+					_particleData.posy[i] += tmp.y;
+				}
+			}
+			else
+			{
+				//Why use so many for-loop separately instead of putting them together?
+				//When the processor needs to read from or write to a location in memory,
+				//it first checks whether a copy of that data is in the cache.
+				//And every property's memory of the particle system is continuous,
+				//for the purpose of improving cache hit rate, we should process only one property in one for-loop AFAP.
+				//It was proved to be effective especially for low-end machine. 
+				for (int i = begin; i < end; ++i)
+				{
+					_particleData.modeB.angle[i] += _particleData.modeB.degreesPerSecond[i] * dt;
+				}
+
+				for (int i = begin; i < end; ++i)
+				{
+					_particleData.modeB.radius[i] += _particleData.modeB.deltaRadius[i] * dt;
+				}
+
+				for (int i = begin; i < end; ++i)
+				{
+					_particleData.posx[i] = -cosf(_particleData.modeB.angle[i]) * _particleData.modeB.radius[i];
+				}
+				for (int i = begin; i < end; ++i)
+				{
+					_particleData.posy[i] = -sinf(_particleData.modeB.angle[i]) * _particleData.modeB.radius[i] * _yCoordFlipped;
+				}
+			}
+
+			//color r,g,b,a
+			for (int i = begin; i < end; ++i)
+			{
+				_particleData.colorR[i] += _particleData.deltaColorR[i] * dt;
+			}
+
+			for (int i = begin; i < end; ++i)
+			{
+				_particleData.colorG[i] += _particleData.deltaColorG[i] * dt;
+			}
+
+			for (int i = begin; i < end; ++i)
+			{
+				_particleData.colorB[i] += _particleData.deltaColorB[i] * dt;
+			}
+
+			for (int i = begin; i < end; ++i)
+			{
+				_particleData.colorA[i] += _particleData.deltaColorA[i] * dt;
+			}
+			//size
+			for (int i = begin; i < end; ++i)
+			{
+				_particleData.size[i] += (_particleData.deltaSize[i] * dt);
+				_particleData.size[i] = MAX(0, _particleData.size[i]);
+			}
+			//angle
+			for (int i = begin; i < end; ++i)
+			{
+				_particleData.rotation[i] += _particleData.deltaRotation[i] * dt;
+			}
+
+			updateParticleQuads();
+			_transformSystemDirty = false;
+		};
+
+		auto t = std::async(std::launch::async, [=]() {
+			fn(0, _particleCount / 4);
+		});
+		auto t2 = std::async(std::launch::async, [=]() {
+			fn(_particleCount / 4, 2 * (_particleCount / 4));
+		});
+		auto t3 = std::async(std::launch::async, [=]() {
+			fn(2 * (_particleCount / 4), 3 * (_particleCount / 4));
+		});
+		auto t4 = std::async(std::launch::async, [=]() {
+			fn(3 * (_particleCount / 4), _particleCount);
+		});
+		t.get();
+		t2.get();
+		t3.get();
+		t4.get();
+        //t.join();
     }
 
     // only update gl buffer when visible
