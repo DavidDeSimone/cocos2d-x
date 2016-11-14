@@ -62,17 +62,17 @@ void ThreadPool::destroyDefaultThreadPool()
     CC_SAFE_DELETE(__defaultThreadPool);
 }
 
-ThreadPool *ThreadPool::createdThreadPool(int minThreadNum, int maxThreadNum, int shrinkInterval, uint64_t maxIdleTime)
+ThreadPool *ThreadPool::createdThreadPool(size_t minThreadNum, size_t maxThreadNum, float shrinkInterval, uint64_t maxIdleTime)
 {
 	return new(std::nothrow) ThreadPool(minThreadNum, maxThreadNum, shrinkInterval, maxIdleTime);
 }
 
-ThreadPool *ThreadPool::createFixedSizeThreadPool(int threadNum)
+ThreadPool *ThreadPool::createFixedSizeThreadPool(size_t threadNum)
 {
     return new (std::nothrow) ThreadPool(threadNum, threadNum);
 }
 
-ThreadPool::ThreadPool(int minNum, int maxNum, int shrinkInterval, uint64_t maxIdleTime)
+ThreadPool::ThreadPool(size_t minNum, size_t maxNum, float shrinkInterval, uint64_t maxIdleTime)
         :  _minThreadNum(minNum)
         ,  _maxThreadNum(maxNum)
 		, _shrinkInterval(shrinkInterval)

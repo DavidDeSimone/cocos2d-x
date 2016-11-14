@@ -63,10 +63,8 @@ private:
 class ThreadPool
 {
 public:
-
-
-	static constexpr int _defaultThreadMin = 4;
-	static constexpr int _defaultThreadMax = 20;
+	static constexpr size_t _defaultThreadMin = 4;
+	static constexpr size_t _defaultThreadMax = 20;
 
 	static constexpr float _defaultShrinkInterval = 5.0f; // in ms
 	static constexpr uint64_t _defaultIdleTime = 3500; // in ms
@@ -85,13 +83,13 @@ public:
      * Creates a cached thread pool
      * @note The return value has to be delete while it doesn't needed
      */
-    static ThreadPool *createdThreadPool(int minThreadNum = _defaultThreadMin, int maxThreadNum = _defaultThreadMax, int shrinkInterval = _defaultShrinkInterval, uint64_t idleTime = _defaultIdleTime);
+    static ThreadPool *createdThreadPool(size_t minThreadNum = _defaultThreadMin, size_t maxThreadNum = _defaultThreadMax, float shrinkInterval = _defaultShrinkInterval, uint64_t idleTime = _defaultIdleTime);
 
     /*
      * Creates a thread pool with fixed thread count
      * @note The return value has to be delete while it doesn't needed
      */
-    static ThreadPool *createFixedSizeThreadPool(int threadNum);
+    static ThreadPool *createFixedSizeThreadPool(size_t threadNum);
 
     // the destructor waits for all the functions in the queue to be finished
     ~ThreadPool();
@@ -112,14 +110,12 @@ public:
 	
 private:
 	friend Worker;
-    ThreadPool(int minThreadNum = _defaultThreadMin, int maxThreadNum = _defaultThreadMax, int shrinkInterval = _defaultShrinkInterval, uint64_t idleTime = _defaultIdleTime);
-
+    ThreadPool(size_t minThreadNum = _defaultThreadMin, size_t maxThreadNum = _defaultThreadMax, float shrinkInterval = _defaultShrinkInterval, uint64_t idleTime = _defaultIdleTime);
     ThreadPool(const ThreadPool&) = delete; // Remove copy constructor, copying a thread pool doesn't make sense.
+    ThreadPool(ThreadPool&&) = default;
 
-    ThreadPool(ThreadPool&&);
-
-    int _minThreadNum;
-    int _maxThreadNum;
+    size_t _minThreadNum;
+	size_t _maxThreadNum;
 	uint64_t _maxIdleTime;
 
     float _shrinkInterval;
