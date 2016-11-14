@@ -27,6 +27,11 @@
 
 #include "cocos/platform/CCThreadPool.h"
 #include "CCStdC.h"
+#include "base/CCDirector.h"
+#include "base/CCScheduler.h"
+
+#include <sstream>
+#include <string>
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -64,35 +69,41 @@ ThreadPool *ThreadPool::createdThreadPool(int minThreadNum, int maxThreadNum, in
 
 ThreadPool *ThreadPool::createFixedSizeThreadPool(int threadNum)
 {
-    ThreadPool *pool = new(std::nothrow) ThreadPool(threadNum, threadNum);
-    if (pool != nullptr)
-    {
-        pool->setFixedSize(true);
-    }
-    return pool;
+    return new (std::nothrow) ThreadPool(threadNum, threadNum);
 }
 
-ThreadPool::ThreadPool(int minNum, int maxNum)
-	: _minThreadNum(minNum)
-	, _maxThreadNum(maxNum)
-{
-
-}
-
-ThreadPool::ThreadPool(int minNum, int maxNum, int shrinkInterval, uint32_t maxIdleTime)
+ThreadPool::ThreadPool(int minNum, int maxNum, int shrinkInterval, uint64_t maxIdleTime)
         :  _minThreadNum(minNum)
         ,  _maxThreadNum(maxNum)
 		, _shrinkInterval(shrinkInterval)
 		, _maxIdleTime(maxIdleTime)
-		, _isFixedSize(false)
 {
-    
+	if (_minThreadNum != _maxThreadNum)
+	{
+		std::ostringstream address;
+		address << (void const *)this;
+		_scheduleId = address.str();
+		Director::getInstance()->getScheduler()->schedule(std::bind(&ThreadPool::evaluateThreads, this, std::placeholders::_1), this, _shrinkInterval, false, _scheduleId);
+	}
+	
 }
 
 // the destructor waits for all the functions in the queue to be finished
 ThreadPool::~ThreadPool()
 {
-   
+	if (_minThreadNum != _maxThreadNum)
+	{
+		Director::getInstance()->getScheduler()->unschedule(_scheduleId, this);
+	}
+	
+	std::unique_lock<std::mutex>(_workerMutex);
+	for (auto& worker : _workers)
+	{
+		worker->isAlive = false;
+		worker->join();
+	}
+
+	_workers.clear();
 }
 
 Worker::Worker(ThreadPool *owner)
@@ -103,14 +114,14 @@ Worker::Worker(ThreadPool *owner)
 		while (true)
 		{
 
-			std::function<void(int)> task;
+			std::function<void(std::thread::id)> task;
 			{
 				std::unique_lock<std::mutex>(owner->_workerMutex);
 				owner->_workerConditional.wait(owner->_workerMutex, [=]() -> bool {
-					return !isAlive || !owner->isAlive;
+					return !isAlive;
 				});
 
-				if (!isAlive || !owner->isAlive)
+				if (!isAlive)
 				{
 					break;
 				}
@@ -119,7 +130,7 @@ Worker::Worker(ThreadPool *owner)
 				owner->_workQueue.erase(owner->_workQueue.begin());
 			}
 
-			task(1);
+			task(std::this_thread::get_id());
 
 			{
 				std::unique_lock<std::mutex>(lastActiveMutex);
@@ -130,8 +141,15 @@ Worker::Worker(ThreadPool *owner)
 	_thread->detach();
 }
 
-void ThreadPool::pushTask(std::function<void(int)>&& runnable,
-                          TaskType type/* = DEFAULT*/)
+void Worker::join()
+{
+	if (_thread)
+	{
+		_thread->join();
+	}
+}
+
+void ThreadPool::pushTask(std::function<void(std::thread::id)>&& runnable)
 {
 	{
 		std::unique_lock<std::mutex>(_workerMutex);
@@ -140,13 +158,13 @@ void ThreadPool::pushTask(std::function<void(int)>&& runnable,
 			_workers.push_back(std::unique_ptr<Worker>(new (std::nothrow) Worker(this)));
 		}
 
-		_workQueue.push_back(std::forward<std::function<void(int)>>(runnable));
+		_workQueue.push_back(std::forward<std::function<void(std::thread::id)>>(runnable));
 	}
 
 	_workerConditional.notify_one();
 }
 
-void ThreadPool::evaluateThreads()
+void ThreadPool::evaluateThreads(float /* dt */)
 {
 	auto now = std::chrono::steady_clock::now();
 	std::unique_lock<std::mutex>(_workerMutex);
@@ -154,7 +172,7 @@ void ThreadPool::evaluateThreads()
 	{
 		auto&& worker = *it;
 		std::unique_lock<std::mutex>(worker->lastActiveMutex);
-		auto lifetime = (now - worker->lastActive).count();
+		auto lifetime = std::chrono::duration_cast<std::chrono::milliseconds>((now - worker->lastActive)).count();
 		if (lifetime > _maxIdleTime)
 		{
 			worker->isAlive = false;

@@ -51,6 +51,8 @@ class Worker {
 public:
 	explicit Worker(ThreadPool *owner);
 	~Worker() = default;
+	void join();
+
 	std::atomic_bool isAlive;
 	std::chrono::steady_clock::time_point lastActive;
 	std::mutex lastActiveMutex;
@@ -68,15 +70,6 @@ public:
 
 	static constexpr float _defaultShrinkInterval = 5.0f; // in ms
 	static constexpr uint64_t _defaultIdleTime = 3500; // in ms
-
-    enum class TaskType
-    {
-        DEFAULT = 0,
-        NETWORK,
-        IO,
-        AUDIO,
-        USER = 1000
-    };
 
     /*
      * Gets the default thread pool which is a cached thread pool with default parameters.
@@ -108,21 +101,10 @@ public:
      *  @param type The task type, it's TASK_TYPE_DEFAULT if this argument isn't assigned
      *  @note This function has to be invoked in cocos thread
      */
-    void pushTask(std::function<void(int /*threadId*/)>&& runnable, TaskType type = TaskType::DEFAULT);
-
-    // Stops all tasks, it will remove all tasks in queue
-    void stopAllTasks();
-
-    // Stops some tasks by type
-    void stopTasksByType(TaskType type);
-
-	void setFixedSize(bool fixedSize) {
-		_isFixedSize = fixedSize;
-	}
+    void pushTask(std::function<void(std::thread::id /*threadId*/)>&& runnable);
 
     // Gets the minimum thread numbers
-    inline int getMinThreadNum() const
-    { return _minThreadNum; };
+    inline int getMinThreadNum() const { return _minThreadNum; };
 
     // Gets the maximum thread numbers
     inline int getMaxThreadNum() const
@@ -130,10 +112,9 @@ public:
 	
 private:
 	friend Worker;
-	ThreadPool(int minNum, int maxNum);
-    ThreadPool(int minNum, int maxNum, int _shrinkStep, uint32_t maxIdleTime);
+    ThreadPool(int minThreadNum = _defaultThreadMin, int maxThreadNum = _defaultThreadMax, int shrinkInterval = _defaultShrinkInterval, uint64_t idleTime = _defaultIdleTime);
 
-    ThreadPool(const ThreadPool&) = delete;
+    ThreadPool(const ThreadPool&) = delete; // Remove copy constructor, copying a thread pool doesn't make sense.
 
     ThreadPool(ThreadPool&&);
 
@@ -142,15 +123,14 @@ private:
 	uint64_t _maxIdleTime;
 
     float _shrinkInterval;
-    bool _isFixedSize;
 
 	std::vector<std::unique_ptr<Worker>> _workers;
-	std::vector<std::function<void(int)>> _workQueue;
+	std::vector<std::function<void(std::thread::id)>> _workQueue;
 	std::mutex _workerMutex;
 	std::condition_variable_any _workerConditional;
-	std::atomic_bool isAlive;
+	std::string _scheduleId;
 
-	void evaluateThreads();
+	void evaluateThreads(float dt);
 };
 
 // end of base group
