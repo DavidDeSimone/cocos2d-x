@@ -118,7 +118,7 @@ Worker::Worker(ThreadPool *owner)
 			{
 				std::unique_lock<std::mutex>(owner->_workerMutex);
 				owner->_workerConditional.wait(owner->_workerMutex, [=]() -> bool {
-					return !isAlive;
+					return !isAlive || owner->_workQueue.size() > 0;
 				});
 
 				if (!isAlive)
