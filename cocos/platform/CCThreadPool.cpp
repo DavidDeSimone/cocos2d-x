@@ -26,7 +26,6 @@
  ****************************************************************************/
 
 #include "cocos/platform/CCThreadPool.h"
-#include "CCStdC.h"
 #include "base/CCDirector.h"
 #include "base/CCScheduler.h"
 
@@ -43,33 +42,26 @@
 
 namespace cocos2d {
 
-static ThreadPool *__defaultThreadPool = nullptr;
+static ThreadPool *defaultPool = nullptr;
 
 ThreadPool *ThreadPool::getDefaultThreadPool()
 {
-    if (__defaultThreadPool == nullptr)
+    if (defaultPool == nullptr)
     {
-        __defaultThreadPool = createdThreadPool(_defaultThreadMin,
-                                                  _defaultThreadMax,
-                                                  _defaultShrinkInterval);
+		defaultPool = new (std::nothrow) ThreadPool();
     }
 
-    return __defaultThreadPool;
+    return defaultPool;
 }
 
 void ThreadPool::destroyDefaultThreadPool()
 {
-    CC_SAFE_DELETE(__defaultThreadPool);
+    CC_SAFE_DELETE(defaultPool);
 }
 
-ThreadPool *ThreadPool::createdThreadPool(size_t minThreadNum, size_t maxThreadNum, float shrinkInterval, uint64_t maxIdleTime)
+ThreadPool::ThreadPool(size_t poolSize)
 {
-	return new(std::nothrow) ThreadPool(minThreadNum, maxThreadNum, shrinkInterval, maxIdleTime);
-}
-
-ThreadPool *ThreadPool::createFixedSizeThreadPool(size_t threadNum)
-{
-    return new (std::nothrow) ThreadPool(threadNum, threadNum);
+	ThreadPool(poolSize, poolSize);
 }
 
 ThreadPool::ThreadPool(size_t minNum, size_t maxNum, float shrinkInterval, uint64_t maxIdleTime)
@@ -100,21 +92,19 @@ ThreadPool::~ThreadPool()
 	for (auto& worker : _workers)
 	{
 		worker->isAlive = false;
-		worker->join();
 	}
 
-	_workers.clear();
+	_workerConditional.notify_all();
 }
 
 Worker::Worker(ThreadPool *owner)
 	: isAlive(true)
 {
 	lastActive = std::chrono::steady_clock::now();
-	_thread = std::unique_ptr<std::thread>(new (std::nothrow) std::thread([this, owner] {
+	std::thread([this, owner] {
+		std::function<void(std::thread::id)> task;
 		while (true)
 		{
-
-			std::function<void(std::thread::id)> task;
 			{
 				std::unique_lock<std::mutex>(owner->_workerMutex);
 				owner->_workerConditional.wait(owner->_workerMutex, [=]() -> bool {
@@ -137,16 +127,7 @@ Worker::Worker(ThreadPool *owner)
 				lastActive = std::chrono::steady_clock::now();
 			}
 		}
-	}));
-	_thread->detach();
-}
-
-void Worker::join()
-{
-	if (_thread)
-	{
-		_thread->join();
-	}
+	}).detach();
 }
 
 void ThreadPool::pushTask(std::function<void(std::thread::id)>&& runnable)

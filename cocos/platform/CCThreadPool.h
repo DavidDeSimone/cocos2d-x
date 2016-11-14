@@ -26,9 +26,6 @@
  ****************************************************************************/
 #pragma once
 
-#include "platform/CCPlatformMacros.h"
-#include "CCStdC.h"
-
 #include <functional>
 #include <memory>
 #include <thread>
@@ -51,13 +48,9 @@ class Worker {
 public:
 	explicit Worker(ThreadPool *owner);
 	~Worker() = default;
-	void join();
-
 	std::atomic_bool isAlive;
 	std::chrono::steady_clock::time_point lastActive;
 	std::mutex lastActiveMutex;
-private:
-	std::unique_ptr<std::thread> _thread;
 };
 
 class ThreadPool
@@ -66,7 +59,7 @@ public:
 	static constexpr size_t _defaultThreadMin = 4;
 	static constexpr size_t _defaultThreadMax = 20;
 
-	static constexpr float _defaultShrinkInterval = 5.0f; // in ms
+	static constexpr float _defaultShrinkInterval = 100.0f; // in ms
 	static constexpr uint64_t _defaultIdleTime = 3500; // in ms
 
     /*
@@ -79,17 +72,8 @@ public:
      */
     static void destroyDefaultThreadPool();
 
-    /*
-     * Creates a cached thread pool
-     * @note The return value has to be delete while it doesn't needed
-     */
-    static ThreadPool *createdThreadPool(size_t minThreadNum = _defaultThreadMin, size_t maxThreadNum = _defaultThreadMax, float shrinkInterval = _defaultShrinkInterval, uint64_t idleTime = _defaultIdleTime);
-
-    /*
-     * Creates a thread pool with fixed thread count
-     * @note The return value has to be delete while it doesn't needed
-     */
-    static ThreadPool *createFixedSizeThreadPool(size_t threadNum);
+	ThreadPool(size_t poolSize);
+	ThreadPool(size_t minThreadNum = _defaultThreadMin, size_t maxThreadNum = _defaultThreadMax, float shrinkInterval = _defaultShrinkInterval, uint64_t idleTime = _defaultIdleTime);
 
     // the destructor waits for all the functions in the queue to be finished
     ~ThreadPool();
@@ -110,7 +94,7 @@ public:
 	
 private:
 	friend Worker;
-    ThreadPool(size_t minThreadNum = _defaultThreadMin, size_t maxThreadNum = _defaultThreadMax, float shrinkInterval = _defaultShrinkInterval, uint64_t idleTime = _defaultIdleTime);
+    
     ThreadPool(const ThreadPool&) = delete; // Remove copy constructor, copying a thread pool doesn't make sense.
     ThreadPool(ThreadPool&&) = default;
 
