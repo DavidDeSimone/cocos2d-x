@@ -108,7 +108,6 @@ private:
 	std::vector<std::function<void(std::thread::id)>> _workQueue;
 	std::mutex _workerMutex;
 	std::condition_variable_any _workerConditional;
-	std::string _scheduleId;
 
 	void evaluateThreads(float dt);
 };

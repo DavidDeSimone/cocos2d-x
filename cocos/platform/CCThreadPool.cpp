@@ -72,20 +72,16 @@ ThreadPool::ThreadPool(size_t minNum, size_t maxNum, float shrinkInterval, uint6
 {
 	if (_minThreadNum != _maxThreadNum)
 	{
-		std::ostringstream address;
-		address << (void const *)this;
-		_scheduleId = address.str();
-		Director::getInstance()->getScheduler()->schedule(std::bind(&ThreadPool::evaluateThreads, this, std::placeholders::_1), this, _shrinkInterval, false, _scheduleId);
+		Director::getInstance()->getScheduler()->schedule(std::bind(&ThreadPool::evaluateThreads, this, std::placeholders::_1), this, _shrinkInterval, false, "ThreadPool");
 	}
 	
 }
 
-// the destructor waits for all the functions in the queue to be finished
 ThreadPool::~ThreadPool()
 {
 	if (_minThreadNum != _maxThreadNum)
 	{
-		Director::getInstance()->getScheduler()->unschedule(_scheduleId, this);
+		Director::getInstance()->getScheduler()->unschedule("ThreadPool", this);
 	}
 	
 	std::unique_lock<std::mutex>(_workerMutex);
@@ -154,7 +150,7 @@ void ThreadPool::evaluateThreads(float /* dt */)
 		auto&& worker = *it;
 		std::unique_lock<std::mutex>(worker->lastActiveMutex);
 		auto lifetime = std::chrono::duration_cast<std::chrono::milliseconds>((now - worker->lastActive)).count();
-		if (lifetime > _maxIdleTime)
+		if (lifetime > _maxIdleTime && _workers.size() > _minThreadNum)
 		{
 			worker->isAlive = false;
 			it = _workers.erase(it);
