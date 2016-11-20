@@ -94,7 +94,7 @@ void ThreadPool::pushTask(std::function<void(std::thread::id)>&& runnable)
             _workers.push_back(cocos2d::make_unique<Worker>(this));
         }
             
-        _workQueue.push_back(std::forward<std::function<void(std::thread::id)>>(runnable));
+        _workQueue.push(std::forward<std::function<void(std::thread::id)>>(runnable));
         _workerConditional.notify_one();
     }
 }
@@ -150,7 +150,7 @@ Worker::Worker(ThreadPool *owner)
 				}
 
 				task = std::move(owner->_workQueue.front());
-				owner->_workQueue.erase(owner->_workQueue.begin());
+                owner->_workQueue.pop();
 			}
 
 			task(std::this_thread::get_id());
