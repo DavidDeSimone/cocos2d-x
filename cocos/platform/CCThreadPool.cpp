@@ -32,15 +32,7 @@
 #include <sstream>
 #include <string>
 
-#ifdef __ANDROID__
-#include <android/log.h>
-#define LOG_TAG "ThreadPool"
-#define LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG,__VA_ARGS__)
-#else
-#define LOGD(...) printf(__VA_ARGS__)
-#endif
-
-namespace cocos2d {
+NS_CC_BEGIN
 
 static ThreadPool *defaultPool = nullptr;
 
@@ -67,8 +59,8 @@ ThreadPool::ThreadPool(size_t poolSize)
 ThreadPool::ThreadPool(size_t minNum, size_t maxNum, float shrinkInterval, uint64_t maxIdleTime)
         :  _minThreadNum(minNum)
         ,  _maxThreadNum(maxNum)
-		, _shrinkInterval(shrinkInterval)
-		, _maxIdleTime(maxIdleTime)
+        , _shrinkInterval(shrinkInterval)
+        , _maxIdleTime(maxIdleTime)
 {
 	if (_minThreadNum != _maxThreadNum)
 	{
@@ -84,13 +76,51 @@ ThreadPool::~ThreadPool()
 		Director::getInstance()->getScheduler()->unschedule("ThreadPool", this);
 	}
 	
-	std::unique_lock<std::mutex>(_workerMutex);
+	std::unique_lock<std::mutex> lock(_workerMutex);
 	for (auto& worker : _workers)
 	{
 		worker->isAlive = false;
 	}
 
 	_workerConditional.notify_all();
+}
+    
+void ThreadPool::pushTask(std::function<void(std::thread::id)>&& runnable)
+{
+    {
+        std::unique_lock<std::mutex> lock(_workerMutex);
+        if (_workers.size() < _maxThreadNum)
+        {
+            _workers.push_back(cocos2d::make_unique<Worker>(this));
+        }
+            
+        _workQueue.push_back(std::forward<std::function<void(std::thread::id)>>(runnable));
+        _workerConditional.notify_one();
+    }
+}
+    
+void ThreadPool::evaluateThreads(float /* dt */)
+{
+    auto now = std::chrono::steady_clock::now();
+    uint32_t killedWorkers = 0;
+    std::unique_lock<std::mutex> lock(_workerMutex);
+    for (auto&& worker : _workers)
+    {
+        std::unique_lock<std::mutex>(worker->lastActiveMutex);
+        auto lifetime = std::chrono::duration_cast<std::chrono::milliseconds>((now - worker->lastActive)).count();
+        if (lifetime > _maxIdleTime && _workers.size() - killedWorkers > _minThreadNum)
+        {
+            worker->isAlive = false;
+            ++killedWorkers;
+        }
+            
+        if (_workers.size() - killedWorkers == _minThreadNum)
+        {
+            break;
+        }
+    }
+        
+    _workerConditional.notify_all();
 }
 
 Worker::Worker(ThreadPool *owner)
@@ -103,12 +133,19 @@ Worker::Worker(ThreadPool *owner)
 		{
 			{
 				std::unique_lock<std::mutex>(owner->_workerMutex);
-				owner->_workerConditional.wait(owner->_workerMutex, [=]() -> bool {
+				owner->_workerConditional.wait(owner->_workerMutex, [this, owner]() -> bool {
 					return !isAlive || owner->_workQueue.size() > 0;
 				});
 
 				if (!isAlive)
 				{
+                    // Deletion is done within the thread loop, to prevent use after free
+                    // on the worker object.
+                    auto it = std::find_if(owner->_workers.begin(), owner->_workers.end(),
+                                           [this](const std::unique_ptr<Worker>& worker) -> bool {
+                                               return this == worker.get();
+                                           });
+                    owner->_workers.erase(it);
 					break;
 				}
 
@@ -119,47 +156,11 @@ Worker::Worker(ThreadPool *owner)
 			task(std::this_thread::get_id());
 
 			{
-				std::unique_lock<std::mutex>(lastActiveMutex);
+				std::unique_lock<std::mutex> lock(lastActiveMutex);
 				lastActive = std::chrono::steady_clock::now();
 			}
 		}
 	}).detach();
 }
 
-void ThreadPool::pushTask(std::function<void(std::thread::id)>&& runnable)
-{
-	{
-		std::unique_lock<std::mutex>(_workerMutex);
-		if (_workers.size() < _maxThreadNum)
-		{
-			_workers.push_back(std::unique_ptr<Worker>(new (std::nothrow) Worker(this)));
-		}
-
-		_workQueue.push_back(std::forward<std::function<void(std::thread::id)>>(runnable));
-	}
-
-	_workerConditional.notify_one();
-}
-
-void ThreadPool::evaluateThreads(float /* dt */)
-{
-	auto now = std::chrono::steady_clock::now();
-	std::unique_lock<std::mutex>(_workerMutex);
-	for (auto it = _workers.begin(); it != _workers.end();)
-	{
-		auto&& worker = *it;
-		std::unique_lock<std::mutex>(worker->lastActiveMutex);
-		auto lifetime = std::chrono::duration_cast<std::chrono::milliseconds>((now - worker->lastActive)).count();
-		if (lifetime > _maxIdleTime && _workers.size() > _minThreadNum)
-		{
-			worker->isAlive = false;
-			it = _workers.erase(it);
-		}
-		else
-		{
-			++it;
-		}
-	}
-}
-
-} // namespace cocos2d
+NS_CC_END

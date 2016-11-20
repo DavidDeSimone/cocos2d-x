@@ -42,13 +42,19 @@ namespace cocos2d {
  * @addtogroup base
  * @{
  */
+    
+template<typename T, typename ...Args>
+std::unique_ptr<T> make_unique( Args&& ...args )
+{
+    return std::unique_ptr<T>( new T( std::forward<Args>(args)... ) );
+}
 
 class ThreadPool;
 class Worker {
 public:
 	explicit Worker(ThreadPool *owner);
 	~Worker() = default;
-	std::atomic_bool isAlive;
+	bool isAlive;
 	std::chrono::steady_clock::time_point lastActive;
 	std::mutex lastActiveMutex;
 };
@@ -75,7 +81,6 @@ public:
 	ThreadPool(size_t poolSize);
 	ThreadPool(size_t minThreadNum = _defaultThreadMin, size_t maxThreadNum = _defaultThreadMax, float shrinkInterval = _defaultShrinkInterval, uint64_t idleTime = _defaultIdleTime);
 
-    // the destructor waits for all the functions in the queue to be finished
     ~ThreadPool();
 
     /* Pushs a task to thread pool
@@ -86,11 +91,10 @@ public:
     void pushTask(std::function<void(std::thread::id /*threadId*/)>&& runnable);
 
     // Gets the minimum thread numbers
-    inline int getMinThreadNum() const { return _minThreadNum; };
+    inline size_t getMinThreadNum() const { return _minThreadNum; };
 
     // Gets the maximum thread numbers
-    inline int getMaxThreadNum() const
-    { return _maxThreadNum; };
+    inline size_t getMaxThreadNum() const { return _maxThreadNum; };
 	
 private:
 	friend Worker;
