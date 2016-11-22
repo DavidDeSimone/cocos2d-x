@@ -534,7 +534,7 @@ bool FileUtils::writeToFile(const ValueMap& /*dict*/, const std::string &/*fullP
 #endif /* (CC_TARGET_PLATFORM != CC_PLATFORM_IOS) && (CC_TARGET_PLATFORM != CC_PLATFORM_MAC) */
 
 // Implement FileUtils
-FileUtils* FileUtils::s_sharedFileUtils = nullptr;
+CC_ATTRIBUTE_THREAD_LOCAL FileUtils*  FileUtils::s_sharedFileUtils = nullptr;
 
 void FileUtils::destroyInstance()
 {
@@ -567,6 +567,13 @@ bool FileUtils::writeStringToFile(const std::string& dataStr, const std::string&
 
     data.fastSet(nullptr, 0);
     return rv;
+}
+
+void FileUtils::writeStringToFile(const std::string& dataStr, const std::string& fullPath, std::function<void(bool)>&& callback)
+{
+    getWriteThreadPool()->pushTask([dataStr, fullPath, callback](std::thread::id) {
+        callback(FileUtils::getInstance()->writeStringToFile(dataStr, fullPath));
+    });
 }
 
 bool FileUtils::writeDataToFile(const Data& data, const std::string& fullPath)
@@ -611,6 +618,31 @@ std::string FileUtils::getStringFromFile(const std::string& filename)
     std::string s;
     getContents(filename, &s);
     return s;
+}
+
+void FileUtils::getStringFromFile(const std::string &filename, std::function<void (std::string &&)> &&callback)
+{
+    getReadThreadPool()->pushTask([filename, callback] (std::thread::id id) {
+        callback(FileUtils::getInstance()->getStringFromFile(filename));
+    });
+}
+
+const std::unique_ptr<ThreadPool>& FileUtils::getReadThreadPool() {
+    if (_readThreadPool == nullptr)
+    {
+        _readThreadPool = cocos2d::make_unique<ThreadPool>(1,3);
+    }
+    
+    return _readThreadPool;
+}
+
+const std::unique_ptr<ThreadPool>& FileUtils::getWriteThreadPool() {
+    if (_writeThreadPool == nullptr)
+    {
+        _writeThreadPool = cocos2d::make_unique<ThreadPool>(0, 1);
+    }
+    
+    return _writeThreadPool;
 }
 
 Data FileUtils::getDataFromFile(const std::string& filename)

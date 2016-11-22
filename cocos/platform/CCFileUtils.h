@@ -34,6 +34,7 @@ THE SOFTWARE.
 #include "base/ccTypes.h"
 #include "base/CCValue.h"
 #include "base/CCData.h"
+#include "platform/CCThreadPool.h"
 
 NS_CC_BEGIN
 
@@ -163,6 +164,8 @@ public:
      *  Gets string from a file.
      */
     virtual std::string getStringFromFile(const std::string& filename);
+    
+    virtual void getStringFromFile(const std::string& filename, std::function<void(std::string&&)>&& callback);
 
     /**
      *  Creates binary data from a file.
@@ -496,6 +499,9 @@ public:
     virtual bool writeStringToFile(const std::string& dataStr, const std::string& fullPath);
 
 
+    virtual void writeStringToFile(const std::string& dataStr, const std::string& fullPath, std::function<void(bool)>&& callback);
+    
+    
     /**
      * write Data into a file
      *
@@ -728,11 +734,39 @@ protected:
      * Writable path.
      */
     std::string _writablePath;
+    
+    /**
+     * Getter for the thread pool responisble for file reads
+     * Use this function over accessing _readThreadPool 
+     * directly, as it is lazy initalized
+     */
+    const std::unique_ptr<ThreadPool>& getReadThreadPool();
+    
+    /**
+     * Getter for the thread pool responisble for file writes
+     * Use this function over accessing _writeThreadPool
+     * directly, as it is lazy initalized
+     */
+    const std::unique_ptr<ThreadPool>& getWriteThreadPool();
+    
+    /**
+     * Thread Pool for file readers. Lazy initalized
+     * in getReadThreadPool. Should not be accessed directly
+     * , only through getReadThreadPool
+     */
+    std::unique_ptr<ThreadPool> _readThreadPool;
+    
+    /**
+     * Thread Pool for file writes. Lazy initalized
+     * in getWriteThreadPool. Should not be accessed directly
+     * , only through getWriteThreadPool
+     */
+    std::unique_ptr<ThreadPool> _writeThreadPool;
 
     /**
      *  The singleton pointer of FileUtils.
      */
-    static FileUtils* s_sharedFileUtils;
+    CC_ATTRIBUTE_THREAD_LOCAL static FileUtils* s_sharedFileUtils;
 
     /**
      *  Remove null value key (for iOS)
