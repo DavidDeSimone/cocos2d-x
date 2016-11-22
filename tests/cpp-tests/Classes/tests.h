@@ -92,6 +92,7 @@
 #include "UnitTest/UnitTest.h"
 #include "UserDefaultTest/UserDefaultTest.h"
 #include "VibrateTest/VibrateTest.h"
+#include "ThreadPoolTest/ThreadPoolTest.h"
 #include "VRTest/VRTest.h"
 #include "ZwoptexTest/ZwoptexTest.h"
 #include "SpriteFrameCacheTest/SpriteFrameCacheTest.h"

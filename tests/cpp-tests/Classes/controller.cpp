@@ -96,6 +96,7 @@ public:
         addTest("TexturePacker Encryption", []() { return new TextureAtlasEncryptionTests(); });
         addTest("Touches", [](){return new TouchesTests(); });
         addTest("Transitions", [](){return new TransitionsTests(); });
+        addTest("Thread Pool", []() { return new ThreadPoolTest(); });
         addTest("Unit Test", []() { return new UnitTests(); });
         addTest("URL Open Test", []() { return new OpenURLTests(); });
         addTest("UserDefault", []() { return new UserDefaultTests(); });
