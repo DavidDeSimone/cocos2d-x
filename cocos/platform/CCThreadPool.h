@@ -68,6 +68,7 @@ public:
 	bool isAlive;
 	std::chrono::steady_clock::time_point lastActive;
 	std::mutex lastActiveMutex;
+    std::unique_ptr<std::thread> _thread;
 };
 
 class ThreadPool
@@ -111,7 +112,9 @@ private:
 	friend Worker;
     
     ThreadPool(const ThreadPool&) = delete; // Remove copy constructor, copying a thread pool doesn't make sense.
+    ThreadPool& operator=(const ThreadPool&) = delete;
     ThreadPool(ThreadPool&&) = default;
+    
 
     size_t _minThreadNum;
 	size_t _maxThreadNum;

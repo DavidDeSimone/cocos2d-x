@@ -21,8 +21,6 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
  
- Inspired by https://github.com/vit-vit/CTPL
- 
  ****************************************************************************/
 
 #include "cocos/platform/CCThreadPool.h"
@@ -75,14 +73,23 @@ ThreadPool::~ThreadPool()
 	{
 		Director::getInstance()->getScheduler()->unschedule("ThreadPool", this);
 	}
-	
-	std::unique_lock<std::mutex> lock(_workerMutex);
-	for (auto& worker : _workers)
-	{
-		worker->isAlive = false;
-	}
-
-	_workerConditional.notify_all();
+    
+    std::vector<std::unique_ptr<std::thread>> threads;
+    
+    {
+        std::unique_lock<std::mutex> lock(_workerMutex);
+        for (auto& worker : _workers)
+        {
+            worker->isAlive = false;
+            threads.push_back(std::move(worker->_thread));
+        }
+    }
+    
+    _workerConditional.notify_all();
+    for (auto&& thread : threads)
+    {
+        thread->join();
+    }
 }
     
 void ThreadPool::pushTask(std::function<void(std::thread::id)>&& runnable)
@@ -104,6 +111,12 @@ void ThreadPool::evaluateThreads(float /* dt */)
     auto now = std::chrono::steady_clock::now();
     uint32_t killedWorkers = 0;
     std::unique_lock<std::mutex> lock(_workerMutex);
+    if (_workQueue.size() != 0)
+    {
+        return;
+    }
+    
+    
     for (auto&& worker : _workers)
     {
         std::unique_lock<std::mutex>(worker->lastActiveMutex);
@@ -127,7 +140,7 @@ Worker::Worker(ThreadPool *owner)
 	: isAlive(true)
 {
 	lastActive = std::chrono::steady_clock::now();
-	std::thread([this, owner] {
+    _thread = cocos2d::make_unique<std::thread>([this, owner] {
 		std::function<void(std::thread::id)> task;
 		while (true)
 		{
@@ -160,7 +173,7 @@ Worker::Worker(ThreadPool *owner)
 				lastActive = std::chrono::steady_clock::now();
 			}
 		}
-	}).detach();
+	});
 }
 
 NS_CC_END
