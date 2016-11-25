@@ -35,6 +35,8 @@ THE SOFTWARE.
 #include "base/CCValue.h"
 #include "base/CCData.h"
 #include "platform/CCThreadPool.h"
+#include "base/CCScheduler.h"
+#include "base/CCDirector.h"
 
 NS_CC_BEGIN
 
@@ -528,6 +530,9 @@ public:
     */
     virtual bool writeValueMapToFile(const ValueMap& dict, const std::string& fullPath);
 
+    virtual void writeValueMapToFile(ValueMap&& dict, const std::string& fullPath, std::function<void(bool)>&& callback);
+    
+    
     /**
     * write ValueVector into a plist file
     *
@@ -536,6 +541,8 @@ public:
     *@return bool
     */
     virtual bool writeValueVectorToFile(const ValueVector& vecData, const std::string& fullPath);
+    
+    virtual void writeValueVectorToFile(ValueVector&& vecData, const std::string& fullPath, std::function<void(bool)>&& callback);
 
     /**
     * Windows fopen can't support UTF-8 filename
@@ -587,6 +594,7 @@ public:
      *  @return True if the directory exists, false if not.
      */
     virtual bool isDirectoryExist(const std::string& dirPath) const;
+    virtual void isDirectoryExist(const std::string& dirPath, std::function<void(bool)>&& callback);
 
     /**
      *  Creates a directory.
@@ -595,6 +603,7 @@ public:
      *  @return True if the directory have been created successfully, false if not.
      */
     virtual bool createDirectory(const std::string& dirPath);
+    virtual void createDirectory(const std::string& dirPath, std::function<void(bool)>&& callback);
 
     /**
      *  Removes a directory.
@@ -603,6 +612,7 @@ public:
      *  @return True if the directory have been removed successfully, false if not.
      */
     virtual bool removeDirectory(const std::string& dirPath);
+    virtual void removeDirectory(const std::string& dirPath, std::function<void(bool)>&& callback);
 
     /**
      *  Removes a file.
@@ -611,6 +621,7 @@ public:
      *  @return True if the file have been removed successfully, false if not.
      */
     virtual bool removeFile(const std::string &filepath);
+    virtual void removeFile(const std::string &filepath, std::function<void(bool)>&& callback);
 
     /**
      *  Renames a file under the given directory.
@@ -783,6 +794,31 @@ protected:
      */
     virtual void valueMapCompact(ValueMap& valueMap);
     virtual void valueVectorCompact(ValueVector& valueVector);
+    
+    void asyncCall(std::function<void(bool)>&& callback, std::function<bool(void)>&& t)
+    {
+        auto lambda = std::bind([](std::thread::id, const std::function<void(bool)>& callbackFn, const std::function<bool(void)>& action) {
+                auto rval = action();
+                Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(callbackFn, rval));
+        }, std::placeholders::_1, std::forward<std::function<void(bool)>>(callback), std::forward<std::function<bool(void)>>(t));
+
+        getReadThreadPool()->pushTask(std::move(lambda));
+    }
+    
+    template<typename T, typename R>
+    void asyncCall(std::function<void(R&&)>&& callback, T&& t)
+    {
+        // Use std::bind to not copying dataStr if dataStr is an rvalue
+        auto lambda = std::bind([](std::thread::id, const std::function<void(R&&)>& callbackFn, const T& action) {
+            auto rval = action();
+            auto fn = std::bind([] (const std::function<void (R&&)>& callbackFnc, decltype(rval)& returnVal) {
+                callbackFnc(std::move(returnVal));
+            }, std::forward<decltype(callbackFn)>(callbackFn), std::move(rval));
+            Director::getInstance()->getScheduler()->performFunctionInCocosThread(fn);
+        }, std::placeholders::_1, std::forward<decltype(callback)>(callback), std::forward<decltype(t)>(t));
+        
+        getReadThreadPool()->pushTask(std::move(lambda));
+    }
 };
 
 // end of support group

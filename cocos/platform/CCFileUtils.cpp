@@ -32,7 +32,7 @@ THE SOFTWARE.
 #include "base/CCDirector.h"
 #include "platform/CCSAXParser.h"
 //#include "base/ccUtils.h"
-#include "base/CCScheduler.h"
+
 
 #include "tinyxml2.h"
 #ifdef MINIZIP_FROM_SYSTEM
@@ -572,13 +572,9 @@ bool FileUtils::writeStringToFile(const std::string& dataStr, const std::string&
 
 void FileUtils::writeStringToFile(std::string&& dataStr, const std::string& fullPath, std::function<void(bool)>&& callback)
 {
-    // Use std::bind to not copying dataStr if dataStr is an rvalue
-    auto lambda = std::bind([fullPath](const std::string& data, const std::function<void(bool)>& callbackFn, std::thread::id) {
-        auto rval = FileUtils::getInstance()->writeStringToFile(data, fullPath);
-        Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(callbackFn, rval));
-    }, std::forward<std::string>(dataStr), std::forward<decltype(callback)>(callback), std::placeholders::_1);
-    
-    getWriteThreadPool()->pushTask(std::move(lambda));
+    asyncCall(std::forward<decltype(callback)>(callback), std::bind([fullPath](const std::string& dataString) -> bool {
+        return FileUtils::getInstance()->writeStringToFile(dataString, fullPath);
+    }, std::forward<std::string>(dataStr)));
 }
 
 bool FileUtils::writeDataToFile(const Data& data, const std::string& fullPath)
@@ -608,13 +604,9 @@ bool FileUtils::writeDataToFile(const Data& data, const std::string& fullPath)
 
 void FileUtils::writeDataToFile(Data&& data, const std::string& fullPath, std::function<void(bool)>&& callback)
 {
-    // Avoid copying data or callback if given an rvalue
-    auto lambda = std::bind([fullPath](const std::function<void(bool)>& fnCallback, const Data& fileData, std::thread::id){
-        auto rval = FileUtils::getInstance()->writeDataToFile(fileData, fullPath);
-        Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(fnCallback, rval));
-    }, std::forward<decltype(callback)>(callback), std::forward<Data>(data), std::placeholders::_1);
-    
-    getWriteThreadPool()->pushTask(std::move(lambda));
+    asyncCall(std::forward<decltype(callback)>(callback), std::bind([fullPath](const Data& fileData) -> bool{
+        return FileUtils::getInstance()->writeDataToFile(fileData, fullPath);
+    }, std::forward<Data>(data)));
 }
 
 bool FileUtils::init()
@@ -641,17 +633,9 @@ void FileUtils::getStringFromFile(const std::string &path, std::function<void (s
     // Get the full path on the main thread, to avoid the issue that FileUtil's is not
     // thread safe, and accessing the fullPath cache and searching the search paths is not thread safe
     auto fullPath = fullPathForFilename(path);
-    auto lambda = std::bind([fullPath](const std::function<void (std::string&&)>& callbackFn, std::thread::id) {
-        
-        auto rval = FileUtils::getInstance()->getStringFromFile(fullPath);
-        auto fn = std::bind([] (const std::function<void (std::string&&)>& callbackFnc, std::string& data) {
-            callbackFnc(std::move(data));
-        }, std::forward<decltype(callbackFn)>(callbackFn), std::move(rval));
-        Director::getInstance()->getScheduler()->performFunctionInCocosThread(fn);
-        
-    }, std::forward<decltype(callback)>(callback), std::placeholders::_1);
-    
-    getReadThreadPool()->pushTask(std::move(lambda));
+    asyncCall(std::forward<decltype(callback)>(callback), [fullPath]() -> std::string {
+        return FileUtils::getInstance()->getStringFromFile(fullPath);
+    });
 }
 
 const std::unique_ptr<ThreadPool>& FileUtils::getReadThreadPool() {
@@ -788,6 +772,21 @@ unsigned char* FileUtils::getFileDataFromZip(const std::string& zipFilePath, con
     }
 
     return buffer;
+}
+
+void FileUtils::writeValueMapToFile(ValueMap&& dict, const std::string& fullPath, std::function<void(bool)>&& callback)
+{
+    
+    asyncCall(std::forward<decltype(callback)>(callback), std::bind([fullPath](const ValueMap& valueMap) -> bool {
+        return FileUtils::getInstance()->writeValueMapToFile(valueMap, fullPath);
+    }, std::forward<ValueMap>(dict)));
+}
+
+void FileUtils::writeValueVectorToFile(ValueVector&& vecData, const std::string& fullPath, std::function<void(bool)>&& callback)
+{
+    asyncCall(std::forward<decltype(callback)>(callback), std::bind([fullPath] (const ValueVector& writeVec) -> bool {
+        return FileUtils::getInstance()->writeValueVectorToFile(writeVec, fullPath);
+    }, std::forward<ValueVector>(vecData)));
 }
 
 std::string FileUtils::getNewFilename(const std::string &filename) const
@@ -1054,12 +1053,10 @@ bool FileUtils::isFileExist(const std::string& filename) const
 
 void FileUtils::isFileExist(const std::string& filename, std::function<void(bool)>&& callback)
 {
-    const std::string& fullPath = fullPathForFilename(filename);
-    auto lambda = std::bind([fullPath](const std::function<void(bool)>& callbackFn, std::thread::id) {
-        auto rval = FileUtils::getInstance()->isFileExist(fullPath);
-        Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(callbackFn, rval));
-    }, std::forward<decltype(callback)>(callback), std::placeholders::_1);
-    getReadThreadPool()->pushTask(std::move(lambda));
+    auto fullPath = fullPathForFilename(filename);
+    asyncCall(std::forward<decltype(callback)>(callback), [fullPath]() -> bool {
+        return FileUtils::getInstance()->isFileExist(fullPath);
+    });
 }
 
 bool FileUtils::isAbsolutePath(const std::string& path) const
@@ -1098,6 +1095,28 @@ bool FileUtils::isDirectoryExist(const std::string& dirPath) const
         }
     }
     return false;
+}
+
+void FileUtils::isDirectoryExist(const std::string& dirPath, std::function<void(bool)>&& callback)
+{
+    auto fullPath = fullPathForFilename(dirPath);
+    asyncCall(std::forward<decltype(callback)>(callback), [fullPath]() -> bool {
+        return FileUtils::getInstance()->isDirectoryExist(fullPath);
+    });
+}
+
+void FileUtils::createDirectory(const std::string& dirPath, std::function<void(bool)>&& callback)
+{
+    asyncCall(std::forward<decltype(callback)>(callback), [dirPath]() -> bool {
+        return FileUtils::getInstance()->createDirectory(dirPath);
+    });
+}
+
+void FileUtils::removeDirectory(const std::string& dirPath, std::function<void(bool)>&& callback)
+{
+    asyncCall(std::forward<decltype(callback)>(callback), [dirPath]() -> bool {
+        return FileUtils::getInstance()->removeDirectory(dirPath);
+    });
 }
 
 #if (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32) || (CC_TARGET_PLATFORM == CC_PLATFORM_WINRT)
