@@ -534,6 +534,31 @@ bool FileUtils::writeToFile(const ValueMap& /*dict*/, const std::string &/*fullP
 
 #endif /* (CC_TARGET_PLATFORM != CC_PLATFORM_IOS) && (CC_TARGET_PLATFORM != CC_PLATFORM_MAC) */
 
+
+template <typename R, class ...Args>
+void async(R(FileUtils::*mf)(Args...), const std::unique_ptr<ThreadPool>& pool,
+                    std::function<void(R&&)> callback, Args&&... args)
+{
+    pool->pushTask([mf, callback, args...] (std::thread::id id) {
+        auto rval = (FileUtils::getInstance()->*mf)(std::forward<Args>(args)...);
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(callback, std::move(rval)));
+    });
+}
+
+template <typename R, class ...Args>
+void asyncOperation(R(FileUtils::*mf)(Args...), const std::unique_ptr<ThreadPool>& pool,
+                    std::function<void(R&&)> callback, Args&&... args)
+{
+    async(mf, pool, std::forward<std::function<void(R&&)>>(callback), std::forward<Args>(args)...);
+}
+
+template <typename R, class ...Args>
+void asyncOperation(R(FileUtils::*mf)(Args...), const std::unique_ptr<ThreadPool>& pool,
+                    std::function<void(R)> callback, Args&&... args)
+{
+    async(mf, pool, std::forward<std::function<void(R&&)>>(callback), std::forward<Args>(args)...);
+}
+
 // Implement FileUtils
 FileUtils*  FileUtils::s_sharedFileUtils = nullptr;
 
@@ -570,14 +595,10 @@ bool FileUtils::writeStringToFile(const std::string& dataStr, const std::string&
     return rv;
 }
 
-void FileUtils::writeStringToFile(const std::string& dataStr, const std::string& path, std::function<void(bool)>&& callback)
+void FileUtils::writeStringToFileAsync(const std::string& dataStr, const std::string& path, std::function<void(bool)>&& callback)
 {
-    auto fullPath = fullPathForFilename(path);
-    CCASSERT(isAbsolutePath(fullPath), "writeStringToFile only supports absolute file paths for now");
-    getWriteThreadPool()->pushTask([fullPath, dataStr, callback] (std::thread::id id) {
-        auto success = FileUtils::getInstance()->writeStringToFile(fullPath, dataStr);
-        Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(callback, success));
-    });
+    const std::string& fullPath = fullPathForFilename(path);
+    asyncOperation(&FileUtils::writeStringToFile, getReadThreadPool(), callback, dataStr, fullPath);
 }
 
 bool FileUtils::writeDataToFile(const Data& data, const std::string& fullPath)
@@ -624,23 +645,12 @@ std::string FileUtils::getStringFromFile(const std::string& filename)
     return s;
 }
 
-void FileUtils::getStringFromFile(const std::string &path, std::function<void (std::string &&)> &&callback)
+void FileUtils::getStringFromFileAsync(const std::string &path, std::function<void (std::string&&)> &&callback)
 {
     // Get the full path on the main thread, to avoid the issue that FileUtil's is not
     // thread safe, and accessing the fullPath cache and searching the search paths is not thread safe
-    auto fullPath = fullPathForFilename(path);
-    
-    getReadThreadPool()->pushTask([fullPath, callback] (std::thread::id id) {
-        auto data = FileUtils::getInstance()->getStringFromFile(fullPath);
-        // This code is to prevent copying the data string once it is read from
-        // the getStringToFile call. By performing a series of move constructor calls,
-        // we can avoid copying the string as we move the operation across threads.
-        auto function = std::bind([](std::string& str, std::function<void(std::string&&)>& cb) {
-            cb(std::move(str));
-        }, std::move(data), std::move(callback));
-        
-        Director::getInstance()->getScheduler()->performFunctionInCocosThread(function);
-    });
+    const std::string& fullPath = fullPathForFilename(path);
+    asyncOperation(&FileUtils::getStringFromFile, getReadThreadPool(), callback, fullPath);
 }
 
 const std::unique_ptr<ThreadPool>& FileUtils::getReadThreadPool() {

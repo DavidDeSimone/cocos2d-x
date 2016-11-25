@@ -165,7 +165,7 @@ public:
      */
     virtual std::string getStringFromFile(const std::string& filename);
     
-    virtual void getStringFromFile(const std::string& path, std::function<void(std::string&&)>&& callback);
+    virtual void getStringFromFileAsync(const std::string& path, std::function<void(std::string&&)>&& callback);
 
     /**
      *  Creates binary data from a file.
@@ -498,7 +498,6 @@ public:
      */
     virtual bool writeStringToFile(const std::string& dataStr, const std::string& fullPath);
 
-
     /**
      * Write a string to a file, done async off the main cocos thread
      *
@@ -506,7 +505,7 @@ public:
      * @param fullPath The full path to the file you want to save a string
      * @param callback The function called once the string has been written to a file
      */
-    virtual void writeStringToFile(const std::string& dataStr, const std::string& path, std::function<void(bool)>&& callback);
+    virtual void writeStringToFileAsync(const std::string& dataStr, const std::string& path, std::function<void(bool)>&& callback);
     
     /**
      * write Data into a file
