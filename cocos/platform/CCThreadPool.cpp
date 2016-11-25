@@ -108,10 +108,12 @@ void ThreadPool::pushTask(std::function<void(std::thread::id)>&& runnable)
     
 void ThreadPool::evaluateThreads(float /* dt */)
 {
+    CCLOG("CALLING EVALUAET");
     auto now = std::chrono::steady_clock::now();
     uint32_t killedWorkers = 0;
     std::unique_lock<std::mutex> lock(_workerMutex);
-    if (_workQueue.size() != 0)
+    // If work is in progress, return and free lock
+    if (_workQueue.size() != 0 || _workers.size() == _minThreadNum)
     {
         return;
     }
@@ -132,8 +134,11 @@ void ThreadPool::evaluateThreads(float /* dt */)
             break;
         }
     }
-        
-    _workerConditional.notify_all();
+    
+    if (killedWorkers > 0)
+    {
+        _workerConditional.notify_all();
+    }
 }
 
 Worker::Worker(ThreadPool *owner)

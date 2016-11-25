@@ -21,8 +21,6 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
  
- Inspired by https://github.com/vit-vit/CTPL
- 
  ****************************************************************************/
 #pragma once
 
@@ -36,16 +34,6 @@
 #include <atomic>
 #include <chrono>
 #include <queue>
-
-#if HAS_CXX11_THREAD_LOCAL
-#define CC_ATTRIBUTE_THREAD_LOCAL thread_local
-#elif defined (__GNUC__)
-#define CC_ATTRIBUTE_THREAD_LOCAL __thread
-#elif defined (_MSC_VER)
-#define CC_ATTRIBUTE_THREAD_LOCAL __declspec(thread)
-#else // !C++11 && !__GNUC__ && !_MSC_VER
-#error "Define a thread local storage qualifier for your compiler/platform!"
-#endif
 
 namespace cocos2d {
 
