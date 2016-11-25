@@ -28,6 +28,7 @@
 
 #include "cocos2d.h"
 #include "../BaseTest.h"
+#include "platform/CCThreadPool.h"
 #include <string>
 
 DEFINE_TEST_SUITE(ThreadPoolTest);
@@ -40,8 +41,12 @@ protected:
 public:
     CREATE_FUNC(ThreadPoolTest1);
     ThreadPoolTest1();
+    
     virtual std::string title() const override;
     virtual std::string subtitle() const override;
+    
+private:
+    std::unique_ptr<cocos2d::ThreadPool> _testThreadPool;
 };
 
 

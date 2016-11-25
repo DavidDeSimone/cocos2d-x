@@ -24,7 +24,6 @@
  ****************************************************************************/
 
 #include "ThreadPoolTest.h"
-#include "platform/CCThreadPool.h"
 
 USING_NS_CC;
 
@@ -35,12 +34,14 @@ ThreadPoolTest::ThreadPoolTest()
 
 ThreadPoolTest1::ThreadPoolTest1()
 {
-    ThreadPool pool(1, 3);
-    pool.pushTask([](std::thread::id) {
+    _testThreadPool = cocos2d::make_unique<ThreadPool>(1, 3);
+    _testThreadPool->pushTask([](std::thread::id id) {
+        CCASSERT(id != Director::getInstance()->getCocos2dThreadId(), "This operation should be performed offthread");
+        
         int curr = 1;
         int prev = 1;
         int temp = 0;
-        for (auto i = 0; i < 3000; ++i)
+        for (auto i = 0; i < 300000; ++i)
         {
             temp = curr;
             curr += prev;
@@ -52,14 +53,23 @@ ThreadPoolTest1::ThreadPoolTest1()
         });
     });
     
-    
-    
-    auto write = FileUtils::getInstance()->getWritablePath();
-    FileUtils::getInstance()->writeStringToFile("This is a test str\n",  write + "__tmp.txt", [write](bool success) {
-        FileUtils::getInstance()->getStringFromFile(write + "__tmp.txt", [](std::string&& result) {
-            CCLOG("Got test result %s", result.c_str());
+    auto lambda = [] (std::thread::id id) {
+        CCASSERT(id != Director::getInstance()->getCocos2dThreadId(), "This operation should be performed offthread");
+        int curr = 1;
+        int prev = 1;
+        int temp = 0;
+        for (auto i = 0; i < 300000; ++i)
+        {
+            temp = curr;
+            curr += prev;
+            prev = temp;
+        }
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread([curr]() {
+            CCLOG("Calcuated offthread l-value fib number as %d", curr);
         });
-    });
+    };
+    
+    _testThreadPool->pushTask(lambda);
 }
 
 std::string ThreadPoolTest1::title() const
@@ -69,5 +79,5 @@ std::string ThreadPoolTest1::title() const
 
 std::string ThreadPoolTest1::subtitle() const
 {
-    return "";
+    return "Verify program doesn't crash";
 }
