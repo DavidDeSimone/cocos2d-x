@@ -125,19 +125,19 @@ void ThreadPool::evaluateThreads(float /* dt */)
 Worker::Worker(ThreadPool *owner)
 	: isAlive(true)
 {
-	lastActive = std::chrono::steady_clock::now();
+    lastActive = std::chrono::steady_clock::now();
     _thread = cocos2d::make_unique<std::thread>([this, owner] {
-		std::function<void(std::thread::id)> task;
-		while (true)
-		{
-			{
-				std::unique_lock<std::mutex>(owner->_workerMutex);
-				owner->_workerConditional.wait(owner->_workerMutex, [this, owner]() -> bool {
-					return !isAlive || owner->_workQueue.size() > 0;
-				});
+        std::function<void(std::thread::id)> task;
+        while (true)
+        {
+            {
+                std::unique_lock<std::mutex>(owner->_workerMutex);
+                owner->_workerConditional.wait(owner->_workerMutex, [this, owner]() -> bool {
+                    return !isAlive || owner->_workQueue.size() > 0;
+                });
 
-				if (!isAlive)
-				{
+                if (!isAlive)
+                {
                     // Deletion is done within the thread loop, to prevent use after free
                     // on the worker object.
                     auto it = std::find_if(owner->_workers.begin(), owner->_workers.end(),
@@ -145,20 +145,20 @@ Worker::Worker(ThreadPool *owner)
                                                return this == worker.get();
                                            });
                     owner->_workers.erase(it);
-					break;
-				}
+                    break;
+                }
 
-				task = std::move(owner->_workQueue.front());
+                task = std::move(owner->_workQueue.front());
                 owner->_workQueue.pop();
-			}
+            }
 
-			task(std::this_thread::get_id());
+            task(std::this_thread::get_id());
 
-			{
-				std::unique_lock<std::mutex> lock(lastActiveMutex);
-				lastActive = std::chrono::steady_clock::now();
-			}
-		}
+            {
+                std::unique_lock<std::mutex> lock(lastActiveMutex);
+                lastActive = std::chrono::steady_clock::now();
+            }
+        }
 	});
 }
 
