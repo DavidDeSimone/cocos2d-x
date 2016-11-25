@@ -32,23 +32,6 @@
 
 NS_CC_BEGIN
 
-static ThreadPool *defaultPool = nullptr;
-
-ThreadPool *ThreadPool::getDefaultThreadPool()
-{
-    if (defaultPool == nullptr)
-    {
-		defaultPool = new (std::nothrow) ThreadPool();
-    }
-
-    return defaultPool;
-}
-
-void ThreadPool::destroyDefaultThreadPool()
-{
-    CC_SAFE_DELETE(defaultPool);
-}
-
 ThreadPool::ThreadPool(size_t poolSize)
 {
 	ThreadPool(poolSize, poolSize);
@@ -78,7 +61,7 @@ ThreadPool::~ThreadPool()
     
     {
         std::unique_lock<std::mutex> lock(_workerMutex);
-        for (auto& worker : _workers)
+        for (auto&& worker : _workers)
         {
             worker->isAlive = false;
             threads.push_back(std::move(worker->_thread));
@@ -108,7 +91,6 @@ void ThreadPool::pushTask(std::function<void(std::thread::id)>&& runnable)
     
 void ThreadPool::evaluateThreads(float /* dt */)
 {
-    CCLOG("CALLING EVALUAET");
     auto now = std::chrono::steady_clock::now();
     uint32_t killedWorkers = 0;
     std::unique_lock<std::mutex> lock(_workerMutex);
@@ -118,12 +100,11 @@ void ThreadPool::evaluateThreads(float /* dt */)
         return;
     }
     
-    
     for (auto&& worker : _workers)
     {
         std::unique_lock<std::mutex>(worker->lastActiveMutex);
         auto lifetime = std::chrono::duration_cast<std::chrono::milliseconds>((now - worker->lastActive)).count();
-        if (lifetime > _maxIdleTime && _workers.size() - killedWorkers > _minThreadNum)
+        if (lifetime > _maxIdleTime)
         {
             worker->isAlive = false;
             ++killedWorkers;

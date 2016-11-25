@@ -65,18 +65,8 @@ public:
 	static constexpr size_t _defaultThreadMin = 4;
 	static constexpr size_t _defaultThreadMax = 20;
 
-	static constexpr float _defaultShrinkInterval = 100.0f; // in ms
+	static constexpr float _defaultShrinkInterval = 15 * 1000.0f; // in ms
 	static constexpr uint64_t _defaultIdleTime = 3500; // in ms
-
-    /*
-     * Gets the default thread pool which is a cached thread pool with default parameters.
-     */
-    static ThreadPool *getDefaultThreadPool();
-
-    /*
-     * Destroys the default thread pool
-     */
-    static void destroyDefaultThreadPool();
 
 	ThreadPool(size_t poolSize);
 	ThreadPool(size_t minThreadNum = _defaultThreadMin, size_t maxThreadNum = _defaultThreadMax, float shrinkInterval = _defaultShrinkInterval, uint64_t idleTime = _defaultIdleTime);
