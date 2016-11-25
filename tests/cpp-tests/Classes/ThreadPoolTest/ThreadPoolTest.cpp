@@ -41,7 +41,7 @@ ThreadPoolTest1::ThreadPoolTest1()
         int curr = 1;
         int prev = 1;
         int temp = 0;
-        for (auto i = 0; i < 300000; ++i)
+        for (auto i = 0; i < 3000; ++i)
         {
             temp = curr;
             curr += prev;
@@ -58,7 +58,7 @@ ThreadPoolTest1::ThreadPoolTest1()
         int curr = 1;
         int prev = 1;
         int temp = 0;
-        for (auto i = 0; i < 300000; ++i)
+        for (auto i = 0; i < 3000; ++i)
         {
             temp = curr;
             curr += prev;
