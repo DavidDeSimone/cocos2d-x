@@ -32,6 +32,7 @@ THE SOFTWARE.
 #include "base/CCDirector.h"
 #include "platform/CCSAXParser.h"
 //#include "base/ccUtils.h"
+#include "base/CCScheduler.h"
 
 #include "tinyxml2.h"
 #ifdef MINIZIP_FROM_SYSTEM
@@ -534,7 +535,7 @@ bool FileUtils::writeToFile(const ValueMap& /*dict*/, const std::string &/*fullP
 #endif /* (CC_TARGET_PLATFORM != CC_PLATFORM_IOS) && (CC_TARGET_PLATFORM != CC_PLATFORM_MAC) */
 
 // Implement FileUtils
-CC_ATTRIBUTE_THREAD_LOCAL FileUtils*  FileUtils::s_sharedFileUtils = nullptr;
+FileUtils*  FileUtils::s_sharedFileUtils = nullptr;
 
 void FileUtils::destroyInstance()
 {
@@ -569,10 +570,13 @@ bool FileUtils::writeStringToFile(const std::string& dataStr, const std::string&
     return rv;
 }
 
-void FileUtils::writeStringToFile(const std::string& dataStr, const std::string& fullPath, std::function<void(bool)>&& callback)
+void FileUtils::writeStringToFile(const std::string& dataStr, const std::string& path, std::function<void(bool)>&& callback)
 {
-    getWriteThreadPool()->pushTask([dataStr, fullPath, callback](std::thread::id) {
-        callback(FileUtils::getInstance()->writeStringToFile(dataStr, fullPath));
+    auto fullPath = fullPathForFilename(path);
+    CCASSERT(isAbsolutePath(fullPath), "writeStringToFile only supports absolute file paths for now");
+    getWriteThreadPool()->pushTask([fullPath, dataStr, callback] (std::thread::id id) {
+        auto success = FileUtils::getInstance()->writeStringToFile(fullPath, dataStr);
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(callback, success));
     });
 }
 
@@ -620,10 +624,22 @@ std::string FileUtils::getStringFromFile(const std::string& filename)
     return s;
 }
 
-void FileUtils::getStringFromFile(const std::string &filename, std::function<void (std::string &&)> &&callback)
+void FileUtils::getStringFromFile(const std::string &path, std::function<void (std::string &&)> &&callback)
 {
-    getReadThreadPool()->pushTask([filename, callback] (std::thread::id id) {
-        callback(FileUtils::getInstance()->getStringFromFile(filename));
+    // Get the full path on the main thread, to avoid the issue that FileUtil's is not
+    // thread safe, and accessing the fullPath cache and searching the search paths is not thread safe
+    auto fullPath = fullPathForFilename(path);
+    
+    getReadThreadPool()->pushTask([fullPath, callback] (std::thread::id id) {
+        auto data = FileUtils::getInstance()->getStringFromFile(fullPath);
+        // This code is to prevent copying the data string once it is read from
+        // the getStringToFile call. By performing a series of move constructor calls,
+        // we can avoid copying the string as we move the operation across threads.
+        auto function = std::bind([](std::string& str, std::function<void(std::string&&)>& cb) {
+            cb(std::move(str));
+        }, std::move(data), std::move(callback));
+        
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread(function);
     });
 }
 

@@ -165,7 +165,7 @@ public:
      */
     virtual std::string getStringFromFile(const std::string& filename);
     
-    virtual void getStringFromFile(const std::string& filename, std::function<void(std::string&&)>&& callback);
+    virtual void getStringFromFile(const std::string& path, std::function<void(std::string&&)>&& callback);
 
     /**
      *  Creates binary data from a file.
@@ -499,8 +499,14 @@ public:
     virtual bool writeStringToFile(const std::string& dataStr, const std::string& fullPath);
 
 
-    virtual void writeStringToFile(const std::string& dataStr, const std::string& fullPath, std::function<void(bool)>&& callback);
-    
+    /**
+     * Write a string to a file, done async off the main cocos thread
+     *
+     * @param dataStr the string want to save
+     * @param fullPath The full path to the file you want to save a string
+     * @param callback The function called once the string has been written to a file
+     */
+    virtual void writeStringToFile(const std::string& dataStr, const std::string& path, std::function<void(bool)>&& callback);
     
     /**
      * write Data into a file
@@ -766,7 +772,7 @@ protected:
     /**
      *  The singleton pointer of FileUtils.
      */
-    CC_ATTRIBUTE_THREAD_LOCAL static FileUtils* s_sharedFileUtils;
+    static FileUtils* s_sharedFileUtils;
 
     /**
      *  Remove null value key (for iOS)
