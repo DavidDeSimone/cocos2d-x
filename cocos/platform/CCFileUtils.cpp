@@ -534,31 +534,6 @@ bool FileUtils::writeToFile(const ValueMap& /*dict*/, const std::string &/*fullP
 
 #endif /* (CC_TARGET_PLATFORM != CC_PLATFORM_IOS) && (CC_TARGET_PLATFORM != CC_PLATFORM_MAC) */
 
-
-template <typename R, class ...Args>
-void async(R(FileUtils::*mf)(Args...), const std::unique_ptr<ThreadPool>& pool,
-                    std::function<void(R&&)> callback, Args&&... args)
-{
-    pool->pushTask([mf, callback, args...] (std::thread::id id) {
-        auto rval = (FileUtils::getInstance()->*mf)(std::forward<Args>(args)...);
-        Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(callback, std::move(rval)));
-    });
-}
-
-template <typename R, class ...Args>
-void asyncOperation(R(FileUtils::*mf)(Args...), const std::unique_ptr<ThreadPool>& pool,
-                    std::function<void(R&&)> callback, Args&&... args)
-{
-    async(mf, pool, std::forward<std::function<void(R&&)>>(callback), std::forward<Args>(args)...);
-}
-
-template <typename R, class ...Args>
-void asyncOperation(R(FileUtils::*mf)(Args...), const std::unique_ptr<ThreadPool>& pool,
-                    std::function<void(R)> callback, Args&&... args)
-{
-    async(mf, pool, std::forward<std::function<void(R&&)>>(callback), std::forward<Args>(args)...);
-}
-
 // Implement FileUtils
 FileUtils*  FileUtils::s_sharedFileUtils = nullptr;
 
@@ -595,10 +570,15 @@ bool FileUtils::writeStringToFile(const std::string& dataStr, const std::string&
     return rv;
 }
 
-void FileUtils::writeStringToFileAsync(const std::string& dataStr, const std::string& path, std::function<void(bool)>&& callback)
+void FileUtils::writeStringToFile(std::string&& dataStr, const std::string& fullPath, std::function<void(bool)>&& callback)
 {
-    const std::string& fullPath = fullPathForFilename(path);
-    asyncOperation(&FileUtils::writeStringToFile, getReadThreadPool(), callback, dataStr, fullPath);
+    // Use std::bind to not copying dataStr if dataStr is an rvalue
+    auto lambda = std::bind([fullPath](const std::string& data, const std::function<void(bool)>& callbackFn, std::thread::id) {
+        auto rval = FileUtils::getInstance()->writeStringToFile(data, fullPath);
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(callbackFn, rval));
+    }, std::forward<std::string>(dataStr), std::forward<decltype(callback)>(callback), std::placeholders::_1);
+    
+    getWriteThreadPool()->pushTask(std::move(lambda));
 }
 
 bool FileUtils::writeDataToFile(const Data& data, const std::string& fullPath)
@@ -626,6 +606,17 @@ bool FileUtils::writeDataToFile(const Data& data, const std::string& fullPath)
     return false;
 }
 
+void FileUtils::writeDataToFile(Data&& data, const std::string& fullPath, std::function<void(bool)>&& callback)
+{
+    // Avoid copying data or callback if given an rvalue
+    auto lambda = std::bind([fullPath](const std::function<void(bool)>& fnCallback, const Data& fileData, std::thread::id){
+        auto rval = FileUtils::getInstance()->writeDataToFile(fileData, fullPath);
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(fnCallback, rval));
+    }, std::forward<decltype(callback)>(callback), std::forward<Data>(data), std::placeholders::_1);
+    
+    getWriteThreadPool()->pushTask(std::move(lambda));
+}
+
 bool FileUtils::init()
 {
     _searchPathArray.push_back(_defaultResRootPath);
@@ -645,18 +636,28 @@ std::string FileUtils::getStringFromFile(const std::string& filename)
     return s;
 }
 
-void FileUtils::getStringFromFileAsync(const std::string &path, std::function<void (std::string&&)> &&callback)
+void FileUtils::getStringFromFile(const std::string &path, std::function<void (std::string&&)>&& callback)
 {
     // Get the full path on the main thread, to avoid the issue that FileUtil's is not
     // thread safe, and accessing the fullPath cache and searching the search paths is not thread safe
-    const std::string& fullPath = fullPathForFilename(path);
-    asyncOperation(&FileUtils::getStringFromFile, getReadThreadPool(), callback, fullPath);
+    auto fullPath = fullPathForFilename(path);
+    auto lambda = std::bind([fullPath](const std::function<void (std::string&&)>& callbackFn, std::thread::id) {
+        
+        auto rval = FileUtils::getInstance()->getStringFromFile(fullPath);
+        auto fn = std::bind([] (const std::function<void (std::string&&)>& callbackFnc, std::string& data) {
+            callbackFnc(std::move(data));
+        }, std::forward<decltype(callbackFn)>(callbackFn), std::move(rval));
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread(fn);
+        
+    }, std::forward<decltype(callback)>(callback), std::placeholders::_1);
+    
+    getReadThreadPool()->pushTask(std::move(lambda));
 }
 
 const std::unique_ptr<ThreadPool>& FileUtils::getReadThreadPool() {
     if (_readThreadPool == nullptr)
     {
-        _readThreadPool = cocos2d::make_unique<ThreadPool>(1,3);
+        _readThreadPool = cocos2d::make_unique<ThreadPool>(0,3);
     }
     
     return _readThreadPool;
@@ -678,6 +679,18 @@ Data FileUtils::getDataFromFile(const std::string& filename)
     return d;
 }
 
+void FileUtils::getDataFromFile(const std::string& filename, std::function<void(Data&&)>&& callback)
+{
+    auto fullPath = fullPathForFilename(filename);
+    auto lambda = std::bind([fullPath](std::function<void(Data&&)>& callbackFn, std::thread::id) {
+        auto rval = FileUtils::getInstance()->getDataFromFile(fullPath);
+        auto fn = std::bind([] (Data& data, const std::function<void(Data&&)>& callbackFnc) {
+            callbackFnc(std::move(data));
+        }, std::move(rval), std::forward<decltype(callbackFn)>(callbackFn));
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread(fn);
+    }, std::forward<decltype(callback)>(callback), std::placeholders::_1);
+    getReadThreadPool()->pushTask(std::move(lambda));
+}
 
 FileUtils::Status FileUtils::getContents(const std::string& filename, ResizableBuffer* buffer)
 {
@@ -1037,6 +1050,16 @@ bool FileUtils::isFileExist(const std::string& filename) const
         else
             return true;
     }
+}
+
+void FileUtils::isFileExist(const std::string& filename, std::function<void(bool)>&& callback)
+{
+    const std::string& fullPath = fullPathForFilename(filename);
+    auto lambda = std::bind([fullPath](const std::function<void(bool)>& callbackFn, std::thread::id) {
+        auto rval = FileUtils::getInstance()->isFileExist(fullPath);
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(callbackFn, rval));
+    }, std::forward<decltype(callback)>(callback), std::placeholders::_1);
+    getReadThreadPool()->pushTask(std::move(lambda));
 }
 
 bool FileUtils::isAbsolutePath(const std::string& path) const

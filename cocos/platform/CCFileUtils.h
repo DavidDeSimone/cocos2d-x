@@ -165,14 +165,15 @@ public:
      */
     virtual std::string getStringFromFile(const std::string& filename);
     
-    virtual void getStringFromFileAsync(const std::string& path, std::function<void(std::string&&)>&& callback);
+    virtual void getStringFromFile(const std::string& path, std::function<void(std::string&&)>&& callback);
 
     /**
      *  Creates binary data from a file.
      *  @return A data object.
      */
     virtual Data getDataFromFile(const std::string& filename);
-
+    
+    virtual void getDataFromFile(const std::string& filename, std::function<void(Data&&)>&& callback);
 
     enum class Status
     {
@@ -505,7 +506,7 @@ public:
      * @param fullPath The full path to the file you want to save a string
      * @param callback The function called once the string has been written to a file
      */
-    virtual void writeStringToFileAsync(const std::string& dataStr, const std::string& path, std::function<void(bool)>&& callback);
+    virtual void writeStringToFile(std::string&& dataStr, const std::string& fullPath, std::function<void(bool)>&& callback);
     
     /**
      * write Data into a file
@@ -515,6 +516,8 @@ public:
      *@return bool
      */
     virtual bool writeDataToFile(const Data& data, const std::string& fullPath);
+    
+    virtual void writeDataToFile(Data&& data, const std::string& fullPath, std::function<void(bool)>&& callback);
 
     /**
     * write ValueMap into a plist file
@@ -555,6 +558,8 @@ public:
      *  @return True if the file exists, false if not.
      */
     virtual bool isFileExist(const std::string& filename) const;
+    
+    virtual void isFileExist(const std::string& filename, std::function<void(bool)>&& callback);
 
     /**
     *  Gets filename extension is a suffix (separated from the base filename by a dot) in lower case.
