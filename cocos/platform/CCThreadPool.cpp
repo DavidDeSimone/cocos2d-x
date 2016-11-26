@@ -131,8 +131,8 @@ Worker::Worker(ThreadPool *owner)
         while (true)
         {
             {
-                std::unique_lock<std::mutex>(owner->_workerMutex);
-                owner->_workerConditional.wait(owner->_workerMutex, [this, owner]() -> bool {
+                std::unique_lock<std::mutex> lock(owner->_workerMutex);
+                owner->_workerConditional.wait(lock, [this, owner]() -> bool {
                     return !isAlive || owner->_workQueue.size() > 0;
                 });
 
@@ -145,7 +145,7 @@ Worker::Worker(ThreadPool *owner)
                                                return this == worker.get();
                                            });
                     owner->_workers.erase(it);
-                    break;
+                    return;
                 }
 
                 task = std::move(owner->_workQueue.front());
