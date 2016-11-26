@@ -572,9 +572,12 @@ bool FileUtils::writeStringToFile(const std::string& dataStr, const std::string&
 
 void FileUtils::writeStringToFile(std::string&& dataStr, const std::string& fullPath, std::function<void(bool)>&& callback)
 {
-    asyncCall(std::forward<decltype(callback)>(callback), std::bind([fullPath](const std::string& dataString) -> bool {
-        return FileUtils::getInstance()->writeStringToFile(dataString, fullPath);
-    }, std::forward<std::string>(dataStr)));
+    performOperationOffthreadForBool(
+        std::bind([fullPath](const std::string& dataString) -> bool {
+            return FileUtils::getInstance()->writeStringToFile(dataString, fullPath);
+        }, std::forward<std::string>(dataStr)),
+        std::forward<decltype(callback)>(callback)
+    );
 }
 
 bool FileUtils::writeDataToFile(const Data& data, const std::string& fullPath)
@@ -604,9 +607,12 @@ bool FileUtils::writeDataToFile(const Data& data, const std::string& fullPath)
 
 void FileUtils::writeDataToFile(Data&& data, const std::string& fullPath, std::function<void(bool)>&& callback)
 {
-    asyncCall(std::forward<decltype(callback)>(callback), std::bind([fullPath](const Data& fileData) -> bool{
-        return FileUtils::getInstance()->writeDataToFile(fileData, fullPath);
-    }, std::forward<Data>(data)));
+    performOperationOffthreadForBool(
+        std::bind([fullPath](const Data& fileData) -> bool{
+            return FileUtils::getInstance()->writeDataToFile(fileData, fullPath);
+        }, std::forward<Data>(data)),
+        std::forward<decltype(callback)>(callback)
+    );
 }
 
 bool FileUtils::init()
@@ -633,18 +639,9 @@ void FileUtils::getStringFromFile(const std::string &path, std::function<void (s
     // Get the full path on the main thread, to avoid the issue that FileUtil's is not
     // thread safe, and accessing the fullPath cache and searching the search paths is not thread safe
     auto fullPath = fullPathForFilename(path);
-    asyncCall(std::forward<decltype(callback)>(callback), [fullPath]() -> std::string {
+    performOperationOffthread([fullPath]() -> std::string {
         return FileUtils::getInstance()->getStringFromFile(fullPath);
-    });
-}
-
-const std::unique_ptr<ThreadPool>& FileUtils::getThreadPool() {
-    if (_threadPool == nullptr)
-    {
-        _threadPool = cocos2d::make_unique<ThreadPool>(1, 3);
-    }
-    
-    return _threadPool;
+    }, std::forward<decltype(callback)>(callback));
 }
 
 Data FileUtils::getDataFromFile(const std::string& filename)
@@ -657,9 +654,9 @@ Data FileUtils::getDataFromFile(const std::string& filename)
 void FileUtils::getDataFromFile(const std::string& filename, std::function<void(Data&&)>&& callback)
 {
     auto fullPath = fullPathForFilename(filename);
-    asyncCall(std::forward<decltype(callback)>(callback), [fullPath]() -> Data {
+    performOperationOffthread([fullPath]() -> Data {
         return FileUtils::getInstance()->getDataFromFile(fullPath);
-    });
+    }, std::forward<decltype(callback)>(callback));
 }
 
 FileUtils::Status FileUtils::getContents(const std::string& filename, ResizableBuffer* buffer)
@@ -763,16 +760,22 @@ unsigned char* FileUtils::getFileDataFromZip(const std::string& zipFilePath, con
 void FileUtils::writeValueMapToFile(ValueMap&& dict, const std::string& fullPath, std::function<void(bool)>&& callback)
 {
     
-    asyncCall(std::forward<decltype(callback)>(callback), std::bind([fullPath](const ValueMap& valueMap) -> bool {
-        return FileUtils::getInstance()->writeValueMapToFile(valueMap, fullPath);
-    }, std::forward<ValueMap>(dict)));
+    performOperationOffthreadForBool(
+        std::bind([fullPath](const ValueMap& valueMap) -> bool {
+            return FileUtils::getInstance()->writeValueMapToFile(valueMap, fullPath);
+        }, std::forward<ValueMap>(dict)),
+        std::forward<decltype(callback)>(callback)
+    );
 }
 
 void FileUtils::writeValueVectorToFile(ValueVector&& vecData, const std::string& fullPath, std::function<void(bool)>&& callback)
 {
-    asyncCall(std::forward<decltype(callback)>(callback), std::bind([fullPath] (const ValueVector& writeVec) -> bool {
-        return FileUtils::getInstance()->writeValueVectorToFile(writeVec, fullPath);
-    }, std::forward<ValueVector>(vecData)));
+    performOperationOffthreadForBool(
+        std::bind([fullPath] (const ValueVector& writeVec) -> bool {
+            return FileUtils::getInstance()->writeValueVectorToFile(writeVec, fullPath);
+        }, std::forward<ValueVector>(vecData)),
+        std::forward<decltype(callback)>(callback)
+    );
 }
 
 std::string FileUtils::getNewFilename(const std::string &filename) const
@@ -1040,9 +1043,9 @@ bool FileUtils::isFileExist(const std::string& filename) const
 void FileUtils::isFileExist(const std::string& filename, std::function<void(bool)>&& callback)
 {
     auto fullPath = fullPathForFilename(filename);
-    asyncCall(std::forward<decltype(callback)>(callback), [fullPath]() -> bool {
+    performOperationOffthreadForBool([fullPath]() -> bool {
         return FileUtils::getInstance()->isFileExist(fullPath);
-    });
+    }, std::forward<decltype(callback)>(callback));
 }
 
 bool FileUtils::isAbsolutePath(const std::string& path) const
@@ -1086,32 +1089,57 @@ bool FileUtils::isDirectoryExist(const std::string& dirPath) const
 void FileUtils::isDirectoryExist(const std::string& dirPath, std::function<void(bool)>&& callback)
 {
     auto fullPath = fullPathForFilename(dirPath);
-    asyncCall(std::forward<decltype(callback)>(callback), [fullPath]() -> bool {
+    performOperationOffthreadForBool([fullPath]() -> bool {
         return FileUtils::getInstance()->isDirectoryExist(fullPath);
-    });
+    }, std::forward<decltype(callback)>(callback));
 }
 
 void FileUtils::createDirectory(const std::string& dirPath, std::function<void(bool)>&& callback)
 {
-    asyncCall(std::forward<decltype(callback)>(callback), [dirPath]() -> bool {
+    performOperationOffthreadForBool([dirPath]() -> bool {
         return FileUtils::getInstance()->createDirectory(dirPath);
-    });
+    }, std::forward<decltype(callback)>(callback));
 }
 
 void FileUtils::removeDirectory(const std::string& dirPath, std::function<void(bool)>&& callback)
 {
-    asyncCall(std::forward<decltype(callback)>(callback), [dirPath]() -> bool {
+    performOperationOffthreadForBool([dirPath]() -> bool {
         return FileUtils::getInstance()->removeDirectory(dirPath);
-    });
+    }, std::forward<decltype(callback)>(callback));
 }
 
 void FileUtils::removeFile(const std::string &filepath, std::function<void (bool)> &&callback)
 {
     auto fullPath = fullPathForFilename(filepath);
-    asyncCall(std::forward<decltype(callback)>(callback), [fullPath]() -> bool {
+    performOperationOffthreadForBool([fullPath]() -> bool {
         return FileUtils::getInstance()->removeFile(fullPath);
-    });
+    }, std::forward<decltype(callback)>(callback));
 }
+
+void FileUtils::renameFile(const std::string &path, const std::string &oldname, const std::string &name, std::function<void(bool)>&& callback)
+{
+    performOperationOffthreadForBool([path, oldname, name]() -> bool {
+        return FileUtils::getInstance()->renameFile(path, oldname, name);
+    }, std::forward<decltype(callback)>(callback));
+                                
+}
+
+void FileUtils::renameFile(const std::string &oldfullpath, const std::string &newfullpath, std::function<void(bool)>&& callback)
+{
+    performOperationOffthreadForBool([oldfullpath, newfullpath]() {
+        return FileUtils::getInstance()->renameFile(oldfullpath, newfullpath);
+    }, std::forward<decltype(callback)>(callback));
+}
+
+void FileUtils::getFileSize(const std::string &filepath, std::function<void(long)>&& callback)
+{
+    auto fullPath = fullPathForFilename(filepath);
+    performOperationOffthreadForLong([fullPath]() {
+        return FileUtils::getInstance()->getFileSize(fullPath);
+    }, std::forward<decltype(callback)>(callback));
+}
+
+
 
 #if (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32) || (CC_TARGET_PLATFORM == CC_PLATFORM_WINRT)
 // windows os implement should override in platform specific FileUtiles class

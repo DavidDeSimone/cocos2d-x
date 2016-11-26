@@ -34,7 +34,7 @@ THE SOFTWARE.
 #include "base/ccTypes.h"
 #include "base/CCValue.h"
 #include "base/CCData.h"
-#include "platform/CCThreadPool.h"
+#include "base/CCAsyncTaskPool.h"
 #include "base/CCScheduler.h"
 #include "base/CCDirector.h"
 
@@ -632,6 +632,7 @@ public:
      *  @return True if the file have been renamed successfully, false if not.
      */
     virtual bool renameFile(const std::string &path, const std::string &oldname, const std::string &name);
+    virtual void renameFile(const std::string &path, const std::string &oldname, const std::string &name, std::function<void(bool)>&& callback);
 
     /**
      *  Renames a file under the given directory.
@@ -641,7 +642,7 @@ public:
      *  @return True if the file have been renamed successfully, false if not.
      */
     virtual bool renameFile(const std::string &oldfullpath, const std::string &newfullpath);
-
+    virtual void renameFile(const std::string &oldfullpath, const std::string &newfullpath, std::function<void(bool)>&& callback);
     /**
      *  Retrieve the file size.
      *
@@ -650,6 +651,7 @@ public:
      *  @return The file size.
      */
     virtual long getFileSize(const std::string &filepath);
+    virtual void getFileSize(const std::string &filepath, std::function<void(long)>&& callback);
 
     /** Returns the full path cache. */
     const std::unordered_map<std::string, std::string>& getFullPathCache() const { return _fullPathCache; }
@@ -755,20 +757,6 @@ protected:
      * Writable path.
      */
     std::string _writablePath;
-    
-    /**
-     * Getter for the thread pool responisble for file reads
-     * Use this function over accessing _readThreadPool 
-     * directly, as it is lazy initalized
-     */
-    const std::unique_ptr<ThreadPool>& getThreadPool();
-    
-    /**
-     * Thread Pool for file operations. Lazy initalized
-     * in getThreadPool. Should not be accessed directly
-     * , only through getThreadPool
-     */
-    std::unique_ptr<ThreadPool> _threadPool;
 
     /**
      *  The singleton pointer of FileUtils.
@@ -781,29 +769,42 @@ protected:
     virtual void valueMapCompact(ValueMap& valueMap);
     virtual void valueVectorCompact(ValueVector& valueVector);
     
-    void asyncCall(std::function<void(bool)>&& callback, std::function<bool(void)>&& t)
+    template<typename T>
+    void performOperationOffthread(std::function<T(void)>&& t, std::function<void(T)>&& callback)
     {
-        auto lambda = std::bind([](std::thread::id, const std::function<void(bool)>& callbackFn, const std::function<bool(void)>& action) {
+        auto lambda = std::bind([](const std::function<void(T)>& callbackFn, const std::function<T(void)>& action) {
                 auto rval = action();
                 Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(callbackFn, rval));
-        }, std::placeholders::_1, std::forward<std::function<void(bool)>>(callback), std::forward<std::function<bool(void)>>(t));
+        }, std::forward<std::function<void(T)>>(callback), std::forward<std::function<T(void)>>(t));
 
-        getThreadPool()->pushTask(std::move(lambda));
+        AsyncTaskPool::getInstance()->enqueue(AsyncTaskPool::TaskType::TASK_IO, [](void*){}, nullptr, std::move(lambda));
+    }
+    
+    template<typename ...ARGS>
+    void performOperationOffthreadForBool(ARGS&& ...args)
+    {
+        performOperationOffthread<bool>(std::forward<ARGS>(args)...);
+    }
+    
+    template<typename ...ARGS>
+    void performOperationOffthreadForLong(ARGS&& ...args)
+    {
+        performOperationOffthread<long>(std::forward<ARGS>(args)...);
     }
     
     template<typename T, typename R>
-    void asyncCall(std::function<void(R&&)>&& callback, T&& t)
+    void performOperationOffthread(T&& t, std::function<void(R&&)>&& callback)
     {
         // Use std::bind to not copying dataStr if dataStr is an rvalue
-        auto lambda = std::bind([](std::thread::id, const std::function<void(R&&)>& callbackFn, const T& action) {
+        auto lambda = std::bind([](const std::function<void(R&&)>& callbackFn, const T& action) {
             auto rval = action();
             auto fn = std::bind([] (const std::function<void (R&&)>& callbackFnc, decltype(rval)& returnVal) {
                 callbackFnc(std::move(returnVal));
             }, std::forward<decltype(callbackFn)>(callbackFn), std::move(rval));
             Director::getInstance()->getScheduler()->performFunctionInCocosThread(fn);
-        }, std::placeholders::_1, std::forward<decltype(callback)>(callback), std::forward<decltype(t)>(t));
+        }, std::forward<decltype(callback)>(callback), std::forward<decltype(t)>(t));
         
-        getThreadPool()->pushTask(std::move(lambda));
+        AsyncTaskPool::getInstance()->enqueue(AsyncTaskPool::TaskType::TASK_IO, [](void*){}, nullptr, std::move(lambda));
     }
 };
 
