@@ -32,6 +32,22 @@
 
 NS_CC_BEGIN
 
+ThreadPool* ThreadPool::_defaulThreadPool = nullptr;
+ThreadPool* ThreadPool::getDefaultThreadPool()
+{
+    if (!_defaulThreadPool)
+    {
+        _defaulThreadPool = new (std::nothrow) ThreadPool();
+    }
+    
+    return _defaulThreadPool;
+}
+
+void ThreadPool::destroyDefaultThreadPool()
+{
+    CC_SAFE_DELETE(_defaulThreadPool);
+}
+
 ThreadPool::ThreadPool(size_t poolSize)
 {
 	ThreadPool(poolSize, poolSize);

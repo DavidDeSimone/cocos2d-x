@@ -61,10 +61,13 @@ public:
 class ThreadPool
 {
 public:
-	static constexpr size_t _defaultThreadMin = 4;
-	static constexpr size_t _defaultThreadMax = 20;
+	static constexpr size_t _defaultThreadMin = 3;
+	static constexpr size_t _defaultThreadMax = 3;
 
 	static constexpr float _defaultShrinkInterval = 15 * 1000.0f; // in ms
+    
+    static ThreadPool* getDefaultThreadPool();
+    static void destroyDefaultThreadPool();
 
 	ThreadPool(size_t poolSize);
 	ThreadPool(size_t minThreadNum = _defaultThreadMin, size_t maxThreadNum = _defaultThreadMax, float shrinkInterval = _defaultShrinkInterval);
@@ -103,6 +106,8 @@ private:
 	std::condition_variable_any _workerConditional;
 
 	void evaluateThreads(float dt);
+    
+    static ThreadPool* _defaulThreadPool;
 };
 
 // end of base group
