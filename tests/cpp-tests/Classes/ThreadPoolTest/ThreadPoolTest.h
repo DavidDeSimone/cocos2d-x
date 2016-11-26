@@ -49,5 +49,21 @@ private:
     std::unique_ptr<cocos2d::ThreadPool> _testThreadPool;
 };
 
+class ThreadPoolNoGrowShrink : public TestCase
+{
+protected:
+    std::string    _title;
+    
+public:
+    CREATE_FUNC(ThreadPoolNoGrowShrink);
+    ThreadPoolNoGrowShrink();
+    
+    virtual std::string title() const override;
+    virtual std::string subtitle() const override;
+    
+private:
+    std::unique_ptr<cocos2d::ThreadPool> _testThreadPool;
+};
+
 
 #endif /* ThreadPoolTest_h */

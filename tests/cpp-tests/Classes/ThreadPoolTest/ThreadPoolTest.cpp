@@ -24,8 +24,11 @@
  ****************************************************************************/
 
 #include "ThreadPoolTest.h"
+#include <cmath>
 
 USING_NS_CC;
+
+#define ITERATION_COUNT 4000
 
 ThreadPoolTest::ThreadPoolTest()
 {
@@ -34,7 +37,11 @@ ThreadPoolTest::ThreadPoolTest()
 
 ThreadPoolTest1::ThreadPoolTest1()
 {
-    _testThreadPool = cocos2d::make_unique<ThreadPool>(1, 3);
+    TTFConfig ttfConfig("fonts/arial.ttf", 15);
+    auto label = Label::createWithTTF(ttfConfig, "% of jobs complete: 0");
+    label->setPositionNormalized(Vec2(0.5, 0.5));
+    addChild(label);
+    _testThreadPool = cocos2d::make_unique<ThreadPool>(1, 20);
     _testThreadPool->pushTask([](std::thread::id id) {
         CCASSERT(id != Director::getInstance()->getCocos2dThreadId(), "This operation should be performed offthread");
         
@@ -53,23 +60,29 @@ ThreadPoolTest1::ThreadPoolTest1()
         });
     });
     
-    auto lambda = [] (std::thread::id id) {
+    
+
+    std::shared_ptr<std::atomic_int> completedCount = std::make_shared<std::atomic_int>(0);
+    auto lambda = [completedCount, label] (std::thread::id id) {
         CCASSERT(id != Director::getInstance()->getCocos2dThreadId(), "This operation should be performed offthread");
-        int curr = 1;
-        int prev = 1;
-        int temp = 0;
-        for (auto i = 0; i < 3000; ++i)
-        {
-            temp = curr;
-            curr += prev;
-            prev = temp;
-        }
-        Director::getInstance()->getScheduler()->performFunctionInCocosThread([curr]() {
-            CCLOG("Calcuated offthread l-value fib number as %d", curr);
+
+        int seconds = std::round(10 * rand_0_1());
+        std::this_thread::sleep_for(std::chrono::milliseconds(seconds));
+        *completedCount += 1;
+        int value = *completedCount;
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread([value, label]() {
+            float percent = ((float)value / ITERATION_COUNT) * 100;
+            std::stringstream ss;
+            ss << "percent of operations complete: " << percent << "%";
+            label->setString(ss.str());
         });
     };
     
-    _testThreadPool->pushTask(lambda);
+    
+    for (auto i = 0; i < ITERATION_COUNT; ++i)
+    {
+       _testThreadPool->pushTask(lambda);
+    }
 }
 
 std::string ThreadPoolTest1::title() const
@@ -80,4 +93,19 @@ std::string ThreadPoolTest1::title() const
 std::string ThreadPoolTest1::subtitle() const
 {
     return "Verify program doesn't crash";
+}
+
+ThreadPoolNoGrowShrink::ThreadPoolNoGrowShrink()
+{
+    
+}
+    
+std::string ThreadPoolNoGrowShrink::title() const
+{
+    return "";
+}
+
+std::string ThreadPoolNoGrowShrink::subtitle() const
+{
+    return "";
 }
