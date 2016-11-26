@@ -58,6 +58,7 @@ ThreadPool::ThreadPool(size_t minNum, size_t maxNum, float shrinkInterval)
         ,  _maxThreadNum(maxNum)
         , _shrinkInterval(shrinkInterval)
 {
+    _queue = std::make_shared<WorkQueue>();
 	if (_minThreadNum != _maxThreadNum)
 	{
 		Director::getInstance()->getScheduler()->schedule(std::bind(&ThreadPool::evaluateThreads, this, std::placeholders::_1), this, _shrinkInterval, false, "ThreadPool");
@@ -72,109 +73,93 @@ ThreadPool::~ThreadPool()
 		Director::getInstance()->getScheduler()->unschedule("ThreadPool", this);
 	}
     
-    std::vector<std::unique_ptr<std::thread>> threads;
-    
     {
-        std::unique_lock<std::mutex> lock(_workerMutex);
-        for (auto&& worker : _workers)
+        std::unique_lock<std::mutex> lock(_queue->_workerMutex);
+        for (auto&& worker : _queue->_workers)
         {
             worker->isAlive = false;
-            threads.push_back(std::move(worker->_thread));
         }
     }
     
-    _workerConditional.notify_all();
-    for (auto&& thread : threads)
-    {
-        thread->join();
-    }
+    _queue->_workerConditional.notify_all();
 }
     
 void ThreadPool::pushTask(std::function<void(std::thread::id)>&& runnable)
 {
     {
-        std::unique_lock<std::mutex> lock(_workerMutex);
-        if (_workers.size() < _maxThreadNum)
+        std::unique_lock<std::mutex> lock(_queue->_workerMutex);
+        if (_queue->_workers.size() < _maxThreadNum)
         {
-            _workers.push_back(cocos2d::make_unique<Worker>(this));
+            _queue->_workers.push_back(cocos2d::make_unique<Worker>(this));
         }
             
-        _workQueue.push(std::forward<std::function<void(std::thread::id)>>(runnable));
-        _workerConditional.notify_one();
+        _queue->_workQueue.push(std::forward<std::function<void(std::thread::id)>>(runnable));
+        _queue->_workerConditional.notify_one();
     }
 }
     
 void ThreadPool::evaluateThreads(float /* dt */)
 {
-    std::vector<std::unique_ptr<std::thread>> killedThreads;
+    uint64_t killedThreads = 0;
     {
-        std::unique_lock<std::mutex> lock(_workerMutex);
+        std::unique_lock<std::mutex> lock(_queue->_workerMutex);
         // If work is in progress, return and free lock
-        if (_workQueue.size() != 0 || _workers.size() == _minThreadNum)
+        if (_queue->_workQueue.size() != 0 || _queue->_workers.size() == _minThreadNum)
         {
             return;
         }
         
-        for (auto&& worker : _workers)
+        for (auto&& worker : _queue->_workers)
         {
-            if (!worker->runningTask)
-            {
-                worker->isAlive = false;
-                killedThreads.push_back(std::move(worker->_thread));
-            }
+            worker->isAlive = false;
+            ++killedThreads;
             
-            if (_workers.size() - killedThreads.size() == _minThreadNum)
+            if (_queue->_workers.size() - killedThreads == _minThreadNum)
             {
                 break;
             }
         }
     }
 
-    if (killedThreads.size() > 0)
+    if (killedThreads > 0)
     {
-        _workerConditional.notify_all();
-        for (auto&& thread : killedThreads)
-        {
-            thread->join();
-        }
+        _queue->_workerConditional.notify_all();
     }
 }
 
 Worker::Worker(ThreadPool *owner)
 	: isAlive(true)
-    , runningTask(false)
 {
-    _thread = cocos2d::make_unique<std::thread>([this, owner] {
+    auto _queue = owner->_queue;
+    std::thread([this, owner, _queue] {
         std::function<void(std::thread::id)> task;
         while (true)
         {
             {
-                std::unique_lock<std::mutex> lock(owner->_workerMutex);
-                owner->_workerConditional.wait(lock, [this, owner]() -> bool {
-                    return !isAlive || owner->_workQueue.size() > 0;
+                std::unique_lock<std::mutex> lock(_queue->_workerMutex);
+                _queue->_workerConditional.wait(lock, [this, owner, _queue]() -> bool {
+                    return !isAlive || _queue->_workQueue.size() > 0;
                 });
 
                 if (!isAlive)
                 {
                     // Deletion is done within the thread loop, to prevent use after free
                     // on the worker object.
-                    auto it = std::find_if(owner->_workers.begin(), owner->_workers.end(),
+                    auto it = std::find_if(_queue->_workers.begin(), _queue->_workers.end(),
                                            [this](const std::unique_ptr<Worker>& worker) -> bool {
                                                return this == worker.get();
                                            });
-                    owner->_workers.erase(it);
+                    _queue->_workers.erase(it);
                     return;
                 }
 
-                task = std::move(owner->_workQueue.front());
-                owner->_workQueue.pop();
+                task = std::move(_queue->_workQueue.front());
+                _queue->_workQueue.pop();
             }
 
-            runningTask = true;
             task(std::this_thread::get_id());
-            runningTask = false;
         }
-	});
+	}).detach();
 }
 
 NS_CC_END

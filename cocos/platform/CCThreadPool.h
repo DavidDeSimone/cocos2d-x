@@ -54,8 +54,15 @@ public:
 	explicit Worker(ThreadPool *owner);
 	~Worker() = default;
 	bool isAlive;
-    std::atomic_bool runningTask;
-    std::unique_ptr<std::thread> _thread;
+};
+    
+class WorkQueue
+{
+public:
+    std::vector<std::unique_ptr<Worker>> _workers;
+    std::queue<std::function<void(std::thread::id)>> _workQueue;
+    std::mutex _workerMutex;
+    std::condition_variable_any _workerConditional;
 };
 
 class ThreadPool
@@ -99,11 +106,8 @@ private:
 	size_t _maxThreadNum;
 
     float _shrinkInterval;
-
-	std::vector<std::unique_ptr<Worker>> _workers;
-	std::queue<std::function<void(std::thread::id)>> _workQueue;
-	std::mutex _workerMutex;
-	std::condition_variable_any _workerConditional;
+    
+    std::shared_ptr<WorkQueue> _queue;
 
 	void evaluateThreads(float dt);
     
