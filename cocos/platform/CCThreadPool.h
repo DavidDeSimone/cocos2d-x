@@ -54,6 +54,7 @@ public:
 	explicit Worker(ThreadPool *owner);
 	~Worker() = default;
 	bool isAlive;
+    std::atomic_bool runningTask;
 	std::chrono::steady_clock::time_point lastActive;
 	std::mutex lastActiveMutex;
     std::unique_ptr<std::thread> _thread;

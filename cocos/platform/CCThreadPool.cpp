@@ -92,38 +92,45 @@ void ThreadPool::pushTask(std::function<void(std::thread::id)>&& runnable)
 void ThreadPool::evaluateThreads(float /* dt */)
 {
     auto now = std::chrono::steady_clock::now();
-    uint32_t killedWorkers = 0;
-    std::unique_lock<std::mutex> lock(_workerMutex);
-    // If work is in progress, return and free lock
-    if (_workQueue.size() != 0 || _workers.size() == _minThreadNum)
+    std::vector<std::unique_ptr<std::thread>> killedThreads;
     {
-        return;
-    }
-    
-    for (auto&& worker : _workers)
-    {
-        std::unique_lock<std::mutex>(worker->lastActiveMutex);
-        auto lifetime = std::chrono::duration_cast<std::chrono::milliseconds>((now - worker->lastActive)).count();
-        if (lifetime > _maxIdleTime)
+        std::unique_lock<std::mutex> lock(_workerMutex);
+        // If work is in progress, return and free lock
+        if (_workQueue.size() != 0 || _workers.size() == _minThreadNum)
         {
-            worker->isAlive = false;
-            ++killedWorkers;
+            return;
         }
+        
+        for (auto&& worker : _workers)
+        {
+            std::unique_lock<std::mutex>(worker->lastActiveMutex);
+            auto lifetime = std::chrono::duration_cast<std::chrono::milliseconds>((now - worker->lastActive)).count();
+            if (lifetime > _maxIdleTime && !worker->runningTask)
+            {
+                worker->isAlive = false;
+                killedThreads.push_back(std::move(worker->_thread));
+            }
             
-        if (_workers.size() - killedWorkers == _minThreadNum)
-        {
-            break;
+            if (_workers.size() - killedThreads.size() == _minThreadNum)
+            {
+                break;
+            }
         }
     }
-    
-    if (killedWorkers > 0)
+
+    if (killedThreads.size() > 0)
     {
         _workerConditional.notify_all();
+        for (auto&& thread : killedThreads)
+        {
+            thread->join();
+        }
     }
 }
 
 Worker::Worker(ThreadPool *owner)
 	: isAlive(true)
+    , runningTask(false)
 {
     lastActive = std::chrono::steady_clock::now();
     _thread = cocos2d::make_unique<std::thread>([this, owner] {
@@ -152,8 +159,10 @@ Worker::Worker(ThreadPool *owner)
                 owner->_workQueue.pop();
             }
 
+            runningTask = true;
             task(std::this_thread::get_id());
-
+            runningTask = false;
+            
             {
                 std::unique_lock<std::mutex> lock(lastActiveMutex);
                 lastActive = std::chrono::steady_clock::now();
