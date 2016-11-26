@@ -641,7 +641,7 @@ void FileUtils::getStringFromFile(const std::string &path, std::function<void (s
 const std::unique_ptr<ThreadPool>& FileUtils::getThreadPool() {
     if (_threadPool == nullptr)
     {
-        _threadPool = cocos2d::make_unique<ThreadPool>(0,3);
+        _threadPool = cocos2d::make_unique<ThreadPool>(1, 3);
     }
     
     return _threadPool;
