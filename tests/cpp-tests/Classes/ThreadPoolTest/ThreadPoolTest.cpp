@@ -33,6 +33,7 @@ USING_NS_CC;
 ThreadPoolTest::ThreadPoolTest()
 {
     ADD_TEST_CASE(ThreadPoolTest1);
+    ADD_TEST_CASE(ThreadPoolNoGrowShrink);
 };
 
 ThreadPoolTest1::ThreadPoolTest1()
@@ -97,12 +98,38 @@ std::string ThreadPoolTest1::subtitle() const
 
 ThreadPoolNoGrowShrink::ThreadPoolNoGrowShrink()
 {
+    _testThreadPool = cocos2d::make_unique<ThreadPool>(0, 50, 0);
+    TTFConfig ttfConfig("fonts/arial.ttf", 15);
+    auto label = Label::createWithTTF(ttfConfig, "% of jobs complete: 0");
+    label->setPositionNormalized(Vec2(0.5, 0.5));
+    addChild(label);
     
+    std::shared_ptr<std::atomic_int> completedCount = std::make_shared<std::atomic_int>(0);
+    auto lambda = [completedCount, label] (std::thread::id id) {
+        CCASSERT(id != Director::getInstance()->getCocos2dThreadId(), "This operation should be performed offthread");
+        
+        int seconds = std::round(10 * rand_0_1());
+        std::this_thread::sleep_for(std::chrono::milliseconds(seconds));
+        *completedCount += 1;
+        int value = *completedCount;
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread([value, label]() {
+            float percent = ((float)value / ITERATION_COUNT) * 100;
+            std::stringstream ss;
+            ss << "percent of operations complete: " << percent << "%";
+            label->setString(ss.str());
+        });
+    };
+    
+    
+    for (auto i = 0; i < ITERATION_COUNT; ++i)
+    {
+        _testThreadPool->pushTask(lambda);
+    }
 }
-    
+
 std::string ThreadPoolNoGrowShrink::title() const
 {
-    return "";
+    return "Running rapid growth/shrink test";
 }
 
 std::string ThreadPoolNoGrowShrink::subtitle() const
