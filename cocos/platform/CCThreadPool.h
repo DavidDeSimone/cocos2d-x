@@ -55,8 +55,6 @@ public:
 	~Worker() = default;
 	bool isAlive;
     std::atomic_bool runningTask;
-	std::chrono::steady_clock::time_point lastActive;
-	std::mutex lastActiveMutex;
     std::unique_ptr<std::thread> _thread;
 };
 
@@ -67,10 +65,9 @@ public:
 	static constexpr size_t _defaultThreadMax = 20;
 
 	static constexpr float _defaultShrinkInterval = 15 * 1000.0f; // in ms
-	static constexpr uint64_t _defaultIdleTime = 3500; // in ms
 
 	ThreadPool(size_t poolSize);
-	ThreadPool(size_t minThreadNum = _defaultThreadMin, size_t maxThreadNum = _defaultThreadMax, float shrinkInterval = _defaultShrinkInterval, uint64_t idleTime = _defaultIdleTime);
+	ThreadPool(size_t minThreadNum = _defaultThreadMin, size_t maxThreadNum = _defaultThreadMax, float shrinkInterval = _defaultShrinkInterval);
 
     ~ThreadPool();
 
@@ -97,7 +94,6 @@ private:
 
     size_t _minThreadNum;
 	size_t _maxThreadNum;
-	uint64_t _maxIdleTime;
 
     float _shrinkInterval;
 

@@ -37,11 +37,10 @@ ThreadPool::ThreadPool(size_t poolSize)
 	ThreadPool(poolSize, poolSize);
 }
 
-ThreadPool::ThreadPool(size_t minNum, size_t maxNum, float shrinkInterval, uint64_t maxIdleTime)
+ThreadPool::ThreadPool(size_t minNum, size_t maxNum, float shrinkInterval)
         :  _minThreadNum(minNum)
         ,  _maxThreadNum(maxNum)
         , _shrinkInterval(shrinkInterval)
-        , _maxIdleTime(maxIdleTime)
 {
 	if (_minThreadNum != _maxThreadNum)
 	{
@@ -91,7 +90,6 @@ void ThreadPool::pushTask(std::function<void(std::thread::id)>&& runnable)
     
 void ThreadPool::evaluateThreads(float /* dt */)
 {
-    auto now = std::chrono::steady_clock::now();
     std::vector<std::unique_ptr<std::thread>> killedThreads;
     {
         std::unique_lock<std::mutex> lock(_workerMutex);
@@ -103,9 +101,7 @@ void ThreadPool::evaluateThreads(float /* dt */)
         
         for (auto&& worker : _workers)
         {
-            std::unique_lock<std::mutex>(worker->lastActiveMutex);
-            auto lifetime = std::chrono::duration_cast<std::chrono::milliseconds>((now - worker->lastActive)).count();
-            if (lifetime > _maxIdleTime && !worker->runningTask)
+            if (!worker->runningTask)
             {
                 worker->isAlive = false;
                 killedThreads.push_back(std::move(worker->_thread));
@@ -132,7 +128,6 @@ Worker::Worker(ThreadPool *owner)
 	: isAlive(true)
     , runningTask(false)
 {
-    lastActive = std::chrono::steady_clock::now();
     _thread = cocos2d::make_unique<std::thread>([this, owner] {
         std::function<void(std::thread::id)> task;
         while (true)
@@ -162,11 +157,6 @@ Worker::Worker(ThreadPool *owner)
             runningTask = true;
             task(std::this_thread::get_id());
             runningTask = false;
-            
-            {
-                std::unique_lock<std::mutex> lock(lastActiveMutex);
-                lastActive = std::chrono::steady_clock::now();
-            }
         }
 	});
 }
