@@ -638,22 +638,13 @@ void FileUtils::getStringFromFile(const std::string &path, std::function<void (s
     });
 }
 
-const std::unique_ptr<ThreadPool>& FileUtils::getReadThreadPool() {
-    if (_readThreadPool == nullptr)
+const std::unique_ptr<ThreadPool>& FileUtils::getThreadPool() {
+    if (_threadPool == nullptr)
     {
-        _readThreadPool = cocos2d::make_unique<ThreadPool>(0,3);
+        _threadPool = cocos2d::make_unique<ThreadPool>(0,3);
     }
     
-    return _readThreadPool;
-}
-
-const std::unique_ptr<ThreadPool>& FileUtils::getWriteThreadPool() {
-    if (_writeThreadPool == nullptr)
-    {
-        _writeThreadPool = cocos2d::make_unique<ThreadPool>(0, 1);
-    }
-    
-    return _writeThreadPool;
+    return _threadPool;
 }
 
 Data FileUtils::getDataFromFile(const std::string& filename)
@@ -666,14 +657,9 @@ Data FileUtils::getDataFromFile(const std::string& filename)
 void FileUtils::getDataFromFile(const std::string& filename, std::function<void(Data&&)>&& callback)
 {
     auto fullPath = fullPathForFilename(filename);
-    auto lambda = std::bind([fullPath](std::function<void(Data&&)>& callbackFn, std::thread::id) {
-        auto rval = FileUtils::getInstance()->getDataFromFile(fullPath);
-        auto fn = std::bind([] (Data& data, const std::function<void(Data&&)>& callbackFnc) {
-            callbackFnc(std::move(data));
-        }, std::move(rval), std::forward<decltype(callbackFn)>(callbackFn));
-        Director::getInstance()->getScheduler()->performFunctionInCocosThread(fn);
-    }, std::forward<decltype(callback)>(callback), std::placeholders::_1);
-    getReadThreadPool()->pushTask(std::move(lambda));
+    asyncCall(std::forward<decltype(callback)>(callback), [fullPath]() -> Data {
+        return FileUtils::getInstance()->getDataFromFile(fullPath);
+    });
 }
 
 FileUtils::Status FileUtils::getContents(const std::string& filename, ResizableBuffer* buffer)
@@ -1116,6 +1102,14 @@ void FileUtils::removeDirectory(const std::string& dirPath, std::function<void(b
 {
     asyncCall(std::forward<decltype(callback)>(callback), [dirPath]() -> bool {
         return FileUtils::getInstance()->removeDirectory(dirPath);
+    });
+}
+
+void FileUtils::removeFile(const std::string &filepath, std::function<void (bool)> &&callback)
+{
+    auto fullPath = fullPathForFilename(filepath);
+    asyncCall(std::forward<decltype(callback)>(callback), [fullPath]() -> bool {
+        return FileUtils::getInstance()->removeFile(fullPath);
     });
 }
 

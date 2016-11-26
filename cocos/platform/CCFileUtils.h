@@ -761,28 +761,14 @@ protected:
      * Use this function over accessing _readThreadPool 
      * directly, as it is lazy initalized
      */
-    const std::unique_ptr<ThreadPool>& getReadThreadPool();
+    const std::unique_ptr<ThreadPool>& getThreadPool();
     
     /**
-     * Getter for the thread pool responisble for file writes
-     * Use this function over accessing _writeThreadPool
-     * directly, as it is lazy initalized
+     * Thread Pool for file operations. Lazy initalized
+     * in getThreadPool. Should not be accessed directly
+     * , only through getThreadPool
      */
-    const std::unique_ptr<ThreadPool>& getWriteThreadPool();
-    
-    /**
-     * Thread Pool for file readers. Lazy initalized
-     * in getReadThreadPool. Should not be accessed directly
-     * , only through getReadThreadPool
-     */
-    std::unique_ptr<ThreadPool> _readThreadPool;
-    
-    /**
-     * Thread Pool for file writes. Lazy initalized
-     * in getWriteThreadPool. Should not be accessed directly
-     * , only through getWriteThreadPool
-     */
-    std::unique_ptr<ThreadPool> _writeThreadPool;
+    std::unique_ptr<ThreadPool> _threadPool;
 
     /**
      *  The singleton pointer of FileUtils.
@@ -802,7 +788,7 @@ protected:
                 Director::getInstance()->getScheduler()->performFunctionInCocosThread(std::bind(callbackFn, rval));
         }, std::placeholders::_1, std::forward<std::function<void(bool)>>(callback), std::forward<std::function<bool(void)>>(t));
 
-        getReadThreadPool()->pushTask(std::move(lambda));
+        getThreadPool()->pushTask(std::move(lambda));
     }
     
     template<typename T, typename R>
@@ -817,7 +803,7 @@ protected:
             Director::getInstance()->getScheduler()->performFunctionInCocosThread(fn);
         }, std::placeholders::_1, std::forward<decltype(callback)>(callback), std::forward<decltype(t)>(t));
         
-        getReadThreadPool()->pushTask(std::move(lambda));
+        getThreadPool()->pushTask(std::move(lambda));
     }
 };
 
