@@ -90,7 +90,7 @@ public:
     /**
      * @js ctor
      */
-    TextureCache();
+    TextureCache() = default;
     /**
      * @js NA
      * @lua NA
@@ -122,9 +122,9 @@ public:
      @param callback A callback function would be invoked after the image is loaded.
      @since v0.8
     */
-    virtual void addImageAsync(const std::string &filepath, const std::function<void(Texture2D*)>& callback);
+    virtual void addImageAsync(const std::string &filepath, std::function<void(Texture2D*)> callback);
     
-    void addImageAsync(const std::string &path, const std::function<void(Texture2D*)>& callback, const std::string& callbackKey );
+    void addImageAsync(const std::string &path, std::function<void(Texture2D*)> callback, const std::string& callbackKey );
 
     /** Unbind a specified bound image asynchronous callback.
      * In the case an object who was bound to an image asynchronous callback was destroyed before the callback is invoked,
@@ -195,10 +195,6 @@ public:
     */
     std::string getCachedTextureInfo() const;
 
-    //Wait for texture cache to quit before destroy instance.
-    /**Called by director, please do not called outside.*/
-    void waitForQuit();
-
     /**
      * Get the file path of the texture
      *
@@ -221,26 +217,14 @@ public:
 
 private:
     void addImageAsyncCallBack(float dt);
-    void loadImage();
     void parseNinePatchImage(Image* image, Texture2D* texture, const std::string& path);
 public:
 protected:
     struct AsyncStruct;
-    
-    std::thread* _loadingThread;
 
     std::deque<AsyncStruct*> _asyncStructQueue;
-    std::deque<AsyncStruct*> _requestQueue;
-    std::deque<AsyncStruct*> _responseQueue;
-
-    std::mutex _requestMutex;
+    std::vector<AsyncStruct*> _responseQueue;
     std::mutex _responseMutex;
-    
-    std::condition_variable _sleepCondition;
-
-    bool _needQuit;
-
-    int _asyncRefCount;
 
     std::unordered_map<std::string, Texture2D*> _textures;
 
