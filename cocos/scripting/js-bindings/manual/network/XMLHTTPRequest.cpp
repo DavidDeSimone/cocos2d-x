@@ -431,18 +431,9 @@ JS_BINDED_CONSTRUCTOR_IMPL(MinXmlHttpRequest)
     req->autorelease();
     JS::AddNamedObjectRoot(cx, &p->obj, "XMLHttpRequest");
 #endif
-
-    jsval out;
-    if (obj)
-    {
-        JS_SetPrivate(obj, req);
-        out = OBJECT_TO_JSVAL(obj);
-    }
-    else
-    {
-        out = JS::NullValue();
-    }
-    args.rval().set(out);
+    
+    JS_SetPrivate(obj, req);
+    args.rval().set(OBJECT_TO_JSVAL(obj));
     return true;
 }
 

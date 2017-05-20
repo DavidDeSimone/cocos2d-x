@@ -57,7 +57,7 @@ public:
 
     MinXmlHttpRequest();
     MinXmlHttpRequest(JSContext *cx);
-    ~MinXmlHttpRequest();
+    virtual ~MinXmlHttpRequest();
     
     JS_BINDED_CLASS_GLUE(MinXmlHttpRequest);
     JS_BINDED_CONSTRUCTOR(MinXmlHttpRequest);
