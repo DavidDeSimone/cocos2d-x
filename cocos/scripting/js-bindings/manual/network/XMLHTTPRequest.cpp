@@ -352,49 +352,6 @@ MinXmlHttpRequest::MinXmlHttpRequest(JSContext *cx)
  */
 MinXmlHttpRequest::~MinXmlHttpRequest()
 {
-    JS::RootedValue callback(_cx);
-    if (_onreadystateCallback)
-    {
-        callback.set(OBJECT_TO_JSVAL(_onreadystateCallback));
-        js_remove_object_root(callback);
-    }
-    if (_onloadstartCallback)
-    {
-        callback.set(OBJECT_TO_JSVAL(_onloadstartCallback));
-        js_remove_object_root(callback);
-    }
-    if (_onabortCallback)
-    {
-        callback.set(OBJECT_TO_JSVAL(_onabortCallback));
-        js_remove_object_root(callback);
-    }
-    if (_onerrorCallback)
-    {
-        callback.set(OBJECT_TO_JSVAL(_onerrorCallback));
-        js_remove_object_root(callback);
-    }
-    if (_onloadCallback)
-    {
-        callback.set(OBJECT_TO_JSVAL(_onloadCallback));
-        js_remove_object_root(callback);
-    }
-    if (_onloadendCallback)
-    {
-        callback.set(OBJECT_TO_JSVAL(_onloadendCallback));
-        js_remove_object_root(callback);
-    }
-    if (_ontimeoutCallback)
-    {
-        callback.set(OBJECT_TO_JSVAL(_ontimeoutCallback));
-        js_remove_object_root(callback);
-    }
-
-    if (_httpRequest)
-    {
-        // We don't need to release _httpRequest here since it will be released in the http callback.
-//        _httpRequest->release();
-    }
-
     CC_SAFE_FREE(_data);
     CC_SAFE_RELEASE_NULL(_scheduler);
 }
@@ -473,9 +430,9 @@ JS_BINDED_PROP_SET_IMPL(MinXmlHttpRequest, x)\
         if (y)\
         {\
             JS::RootedValue oldCallback(cx, OBJECT_TO_JSVAL(y));\
-            js_remove_object_root(oldCallback);\
+            js_remove_object_reference(args.thisv(), oldCallback);\
         }\
-        js_add_object_root(callback);\
+        js_add_object_reference(args.thisv(), callback);\
         y = callback.toObjectOrNull();\
     }\
     return true;\
